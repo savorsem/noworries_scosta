@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React from 'react';
-import { Key, RotateCcw } from 'lucide-react';
+import { Key, RotateCcw, Trash2 } from 'lucide-react';
 
 interface ApiKeyDialogProps {
   onContinue: () => void;
@@ -21,12 +21,17 @@ const ApiKeyDialog: React.FC<ApiKeyDialogProps> = ({ onContinue }) => {
   };
 
   const handleReset = async () => {
+    // Explicitly clear local storage as requested
+    localStorage.removeItem('API_KEY');
+    localStorage.removeItem('gemini_api_key');
+
     // Fix: Use any-casting for window to access aistudio and avoid global type definition conflicts
     const aistudio = (window as any).aistudio;
     if (aistudio) {
       await aistudio.openSelectKey();
     }
-    onContinue();
+    // We don't call onContinue() here immediately, allowing the user to 
+    // explicitly confirm the new selection via the main button or by checking the UI state.
   };
 
   return (
@@ -56,10 +61,10 @@ const ApiKeyDialog: React.FC<ApiKeyDialogProps> = ({ onContinue }) => {
 
         <button
           onClick={handleReset}
-          className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white transition-all rounded-lg hover:bg-white/5 w-full border border-white/5 hover:border-white/10 group"
+          className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-red-400 hover:text-red-300 transition-all rounded-lg hover:bg-red-500/10 w-full border border-white/5 hover:border-red-500/20 group"
         >
-          <RotateCcw className="w-3.5 h-3.5 group-hover:rotate-[-45deg] transition-transform" />
-          Сбросить и выбрать заново
+          <Trash2 className="w-3.5 h-3.5 transition-transform" />
+          Сбросить API ключ
         </button>
 
         <p className="text-gray-500 mt-6 text-xs font-medium">

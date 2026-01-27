@@ -13,6 +13,9 @@ export enum AppState {
 export enum VeoModel {
   VEO_FAST = 'veo-3.1-fast-generate-preview',
   VEO_31 = 'veo-3.1-generate-preview',
+  VEO_3_FAST = 'veo-3.0-fast-generate-preview',
+  VEO_3 = 'veo-3.0-generate-preview',
+  VEO_2 = 'veo-2.0-generate-preview',
 }
 
 export enum AspectRatio {

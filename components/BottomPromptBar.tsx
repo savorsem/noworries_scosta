@@ -668,6 +668,13 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
                           <option value={VeoModel.VEO_FAST}>⚡ Veo 3.1 Fast (Быстрая/Preview)</option>
                           <option value={VeoModel.VEO_31}>🌟 Veo 3.1 Pro (Высокое качество)</option>
                       </optgroup>
+                      <optgroup label="Veo 3.0">
+                          <option value={VeoModel.VEO_3_FAST}>🚀 Veo 3.0 Fast</option>
+                          <option value={VeoModel.VEO_3}>🎥 Veo 3.0 Standard</option>
+                      </optgroup>
+                      <optgroup label="Legacy">
+                          <option value={VeoModel.VEO_2}>🕰️ Veo 2.0 (Стабильная)</option>
+                      </optgroup>
                     </select>
                     <button onClick={() => setAspectRatio(aspectRatio === AspectRatio.LANDSCAPE ? AspectRatio.PORTRAIT : AspectRatio.LANDSCAPE)} className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-white transition-colors" title="Сменить ориентацию">
                       {aspectRatio === AspectRatio.LANDSCAPE ? <Monitor size={14} /> : <Smartphone size={14} />}
