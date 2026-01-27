@@ -226,10 +226,14 @@ export const generateVideo = async (params: GenerateVideoParams): Promise<{url: 
       return op;
   };
 
-  const modelChain = [params.model, VeoModel.VEO_FAST, VeoModel.VEO_2];
+  // Removed VEO_2 from chain to prevent 404
+  const modelChain = [params.model, VeoModel.VEO_FAST];
+  // Remove duplicate if user selected VEO_FAST
+  const uniqueChain = Array.from(new Set(modelChain));
+
   let lastError = null;
 
-  for (const model of modelChain) {
+  for (const model of uniqueChain) {
       try {
           const op = await runGeneration(model as VeoModel);
           if (op.response?.generatedVideos?.[0]) {

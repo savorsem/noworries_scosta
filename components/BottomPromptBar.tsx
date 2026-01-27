@@ -629,10 +629,15 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
 
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-2">
-                    <select value={selectedModel} onChange={e => setSelectedModel(e.target.value as VeoModel)} className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white/60 focus:outline-none">
-                      <option value={VeoModel.VEO_FAST}>Быстрая (3.1 Fast)</option>
-                      <option value={VeoModel.VEO_31}>Продвинутая (3.1 Pro)</option>
-                      <option value={VeoModel.VEO_2}>Veo 2</option>
+                    <select 
+                        value={selectedModel} 
+                        onChange={e => setSelectedModel(e.target.value as VeoModel)} 
+                        className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white/80 focus:outline-none"
+                    >
+                      <optgroup label="Veo 3.1 (Актуальные)">
+                          <option value={VeoModel.VEO_FAST}>⚡ Veo 3.1 Fast (Быстрая/Preview)</option>
+                          <option value={VeoModel.VEO_31}>🌟 Veo 3.1 Pro (Высокое качество)</option>
+                      </optgroup>
                     </select>
                     <button onClick={() => setAspectRatio(aspectRatio === AspectRatio.LANDSCAPE ? AspectRatio.PORTRAIT : AspectRatio.LANDSCAPE)} className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-white transition-colors" title="Сменить ориентацию">
                       {aspectRatio === AspectRatio.LANDSCAPE ? <Monitor size={14} /> : <Smartphone size={14} />}

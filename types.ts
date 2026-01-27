@@ -11,7 +11,6 @@ export enum AppState {
 }
 
 export enum VeoModel {
-  VEO_2 = 'veo-2-generate-preview',
   VEO_FAST = 'veo-3.1-fast-generate-preview',
   VEO_31 = 'veo-3.1-generate-preview',
 }
@@ -126,4 +125,28 @@ export interface StudioSettings {
     filmGrain: 'None' | 'Fine' | 'Heavy';
     colorTone: 'Neutral' | 'Warm' | 'Cool';
     density: 'Compact' | 'Comfortable';
+}
+
+// --- NEW SETTINGS TYPES ---
+
+export interface ApiIntegrations {
+  elevenLabsKey?: string;
+  midjourneyKey?: string;
+  runwayKey?: string;
+  customProxyUrl?: string;
+}
+
+export interface SystemHealth {
+  status: 'healthy' | 'degraded' | 'critical';
+  lastCheck: number;
+  activeErrors: number;
+  memoryUsage?: number;
+}
+
+export interface GlobalSettings {
+  theme: string;
+  integrations: ApiIntegrations;
+  autoHeal: boolean;
+  syncToSupabase: boolean;
+  debugMode: boolean;
 }

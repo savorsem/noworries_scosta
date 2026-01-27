@@ -3,8 +3,9 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { FeedPost, CameoProfile, AgentMessage, StoryboardFrame } from '../types';
+import { FeedPost, CameoProfile, AgentMessage, StoryboardFrame, GlobalSettings } from '../types';
 import { supabase } from '../services/supabaseClient';
+import { healer } from '../services/healerService'; // Circular dependency risk? Handled by minimal imports in healer.
 
 // Helper to upload a file (Blob or File) to Supabase Storage
 const uploadFile = async (bucket: string, path: string, file: Blob): Promise<string | null> => {
@@ -40,6 +41,32 @@ export const base64ToBlob = async (base64Data: string): Promise<Blob> => {
     } catch (e) {
         console.error("Base64 to Blob conversion failed", e);
         return new Blob([]);
+    }
+};
+
+// --- SETTINGS SYNC ---
+
+export const syncUserSettings = async (settings: GlobalSettings) => {
+    try {
+        // Since we don't have user Auth fully integrated in UI, we use a local ID or a single 'global' row for this demo.
+        // In production with Auth, this would use the user's UUID.
+        const userId = localStorage.getItem('user_uuid') || 'anonymous_user';
+        if (!localStorage.getItem('user_uuid')) localStorage.setItem('user_uuid', userId);
+
+        const { error } = await supabase
+            .from('user_settings')
+            .upsert({
+                user_id: userId,
+                settings: settings,
+                updated_at: new Date().toISOString()
+            });
+            
+        if (error) {
+            // If table doesn't exist or RLS blocks it, we fallback silently to local
+            console.warn("Cloud sync warning (settings):", error.message);
+        }
+    } catch (e) {
+        console.warn("Cloud sync failed (settings)", e);
     }
 };
 
@@ -300,6 +327,11 @@ export const getStoryboardFrames = async (): Promise<StoryboardFrame[]> => {
 
 export const logEvent = async (level: 'info' | 'warn' | 'error', message: string, details?: any) => {
     try {
+        // Report to Healer Service locally immediately
+        if (level === 'error') {
+            healer.reportError(message);
+        }
+
         const { error } = await supabase
             .from('app_logs')
             .insert({
