@@ -4,141 +4,174 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { FeedPost, CameoProfile } from '../types';
+import { supabase } from '../services/supabaseClient';
 
-const DB_NAME = 'noworries_db';
-const STORE_NAME = 'feed_store';
-const PROFILES_STORE_NAME = 'profiles_store';
-const DB_VERSION = 2;
+// Helper to upload a file (Blob or File) to Supabase Storage
+const uploadFile = async (bucket: string, path: string, file: Blob): Promise<string | null> => {
+    try {
+        const { data, error } = await supabase.storage
+            .from(bucket)
+            .upload(path, file, {
+                cacheControl: '3600',
+                upsert: true
+            });
 
-export const initDB = (): Promise<IDBDatabase> => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+        if (error) {
+            console.warn(`Storage upload warning for ${path}:`, error.message);
+            return null;
+        }
 
-    request.onerror = (event) => reject('IndexedDB error: ' + (event.target as any).error);
+        const { data: { publicUrl } } = supabase.storage
+            .from(bucket)
+            .getPublicUrl(path);
 
-    request.onsuccess = (event) => resolve((event.target as IDBOpenDBRequest).result);
+        return publicUrl;
+    } catch (e) {
+        console.error(`Upload failed for ${path}:`, e);
+        return null;
+    }
+};
 
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains(PROFILES_STORE_NAME)) {
-        db.createObjectStore(PROFILES_STORE_NAME, { keyPath: 'id' });
-      }
-    };
-  });
+// Helper to convert Base64 string to Blob
+const base64ToBlob = async (base64Data: string): Promise<Blob> => {
+    try {
+        const response = await fetch(base64Data);
+        return await response.blob();
+    } catch (e) {
+        console.error("Base64 to Blob conversion failed", e);
+        return new Blob([]);
+    }
 };
 
 export const savePost = async (post: FeedPost, videoBlob?: Blob) => {
-  const db = await initDB();
-  return new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction([STORE_NAME], 'readwrite');
-    const store = transaction.objectStore(STORE_NAME);
-    
-    // First, try to get the existing record to preserve the blob if a new one isn't provided
-    const getRequest = store.get(post.id);
+    try {
+        const postData = { ...post };
 
-    getRequest.onsuccess = () => {
-        const existingRecord = getRequest.result;
-        
-        // Start with the new post data
-        const record = { ...post };
-
-        // Priority 1: A new blob is explicitly provided (e.g. fresh generation)
+        // 1. Upload Video if a new blob is provided
         if (videoBlob) {
-            (record as any).videoBlob = videoBlob;
-        } 
-        // Priority 2: Use existing blob from DB if available
-        else if (existingRecord && existingRecord.videoBlob) {
-            (record as any).videoBlob = existingRecord.videoBlob;
+            const fileName = `${post.id}.mp4`;
+            const publicUrl = await uploadFile('videos', fileName, videoBlob);
+            if (publicUrl) {
+                postData.videoUrl = publicUrl;
+            }
+        } else if (postData.videoUrl && postData.videoUrl.startsWith('blob:')) {
+            try {
+                const res = await fetch(postData.videoUrl);
+                const blob = await res.blob();
+                const fileName = `${post.id}.mp4`;
+                const publicUrl = await uploadFile('videos', fileName, blob);
+                if (publicUrl) postData.videoUrl = publicUrl;
+            } catch (e) {
+                console.error("Failed to recover blob from URL", e);
+            }
         }
 
-        // Logic for videoUrl:
-        // If it's a 'blob:' URL, it is ephemeral and should NOT be saved to DB.
-        if (record.videoUrl && record.videoUrl.startsWith('blob:')) {
-            delete (record as any).videoUrl;
-        }
+        // 2. Save metadata to DB
+        // We strip undefined values to avoid issues with some DB drivers, though Supabase JS handles it mostly fine.
+        const { error } = await supabase
+            .from('posts')
+            .upsert({
+                id: postData.id,
+                username: postData.username,
+                "avatarUrl": postData.avatarUrl,
+                description: postData.description,
+                "modelTag": postData.modelTag,
+                status: postData.status,
+                "videoUrl": postData.videoUrl,
+                "errorMessage": postData.errorMessage,
+                "referenceImageBase64": postData.referenceImageBase64,
+                filters: postData.filters,
+                "aspectRatio": postData.aspectRatio,
+                resolution: postData.resolution,
+                "originalParams": postData.originalParams,
+            });
 
-        const putRequest = store.put(record);
-        putRequest.onsuccess = () => resolve();
-        putRequest.onerror = () => reject('Error saving post');
-    };
+        if (error) throw error;
+        console.log("Post saved to Supabase:", postData.id);
 
-    getRequest.onerror = (e) => reject('Error checking for existing post');
-  });
+    } catch (e: any) {
+        console.error('Error saving post to Supabase:', e.message || e);
+    }
 };
 
 export const getAllPosts = async (): Promise<FeedPost[]> => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([STORE_NAME], 'readonly');
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.getAll();
+    try {
+        const { data, error } = await supabase
+            .from('posts')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-    request.onsuccess = () => {
-      const records = request.result;
-      const posts = records.map((record: any) => {
-        let videoUrl = record.videoUrl;
-
-        // If we have a stored blob, create a fresh object URL for this session
-        if (record.videoBlob) {
-          videoUrl = URL.createObjectURL(record.videoBlob);
-        }
-        
-        // Remove the heavy videoBlob from the returned object to keep the UI lightweight
-        const { videoBlob, ...postData } = record;
-        return { ...postData, videoUrl };
-      });
-      
-      resolve(posts.reverse());
-    };
-    request.onerror = () => reject('Error getting posts');
-  });
+        if (error) throw error;
+        return (data as FeedPost[]) || [];
+    } catch (e) {
+        console.error('Error fetching posts:', e);
+        return [];
+    }
 };
 
 export const deletePost = async (id: string) => {
-    const db = await initDB();
-    return new Promise<void>((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.delete(id);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject('Error deleting post');
-    });
+    try {
+        await supabase.storage.from('videos').remove([`${id}.mp4`]);
+        const { error } = await supabase.from('posts').delete().eq('id', id);
+        if (error) throw error;
+    } catch (e) {
+        console.error('Error deleting post:', e);
+    }
 };
 
 // Profile Functions
 
 export const saveProfile = async (profile: CameoProfile) => {
-  const db = await initDB();
-  return new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction([PROFILES_STORE_NAME], 'readwrite');
-    const store = transaction.objectStore(PROFILES_STORE_NAME);
-    const request = store.put(profile);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject('Error saving profile');
-  });
+    try {
+        let finalImageUrl = profile.imageUrl;
+
+        if (profile.imageUrl && profile.imageUrl.startsWith('data:')) {
+            const blob = await base64ToBlob(profile.imageUrl);
+            const match = profile.imageUrl.match(/^data:image\/(\w+);base64,/);
+            const ext = match ? match[1] : 'png';
+            const fileName = `${profile.id}.${ext}`;
+            
+            const publicUrl = await uploadFile('images', fileName, blob);
+            if (publicUrl) {
+                finalImageUrl = publicUrl;
+            }
+        }
+
+        const { error } = await supabase
+            .from('profiles')
+            .upsert({
+                id: profile.id,
+                name: profile.name,
+                "imageUrl": finalImageUrl,
+                "group": profile.group
+            });
+
+        if (error) throw error;
+    } catch (e) {
+        console.error('Error saving profile:', e);
+    }
 };
 
 export const getUserProfiles = async (): Promise<CameoProfile[]> => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([PROFILES_STORE_NAME], 'readonly');
-    const store = transaction.objectStore(PROFILES_STORE_NAME);
-    const request = store.getAll();
-    request.onsuccess = () => resolve(request.result || []);
-    request.onerror = () => reject('Error getting profiles');
-  });
+    try {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return (data as CameoProfile[]) || [];
+    } catch (e) {
+        console.error('Error fetching profiles:', e);
+        return [];
+    }
 };
 
 export const deleteProfile = async (id: string) => {
-    const db = await initDB();
-    return new Promise<void>((resolve, reject) => {
-        const transaction = db.transaction([PROFILES_STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(PROFILES_STORE_NAME);
-        const request = store.delete(id);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject('Error deleting profile');
-    });
+    try {
+        const { error } = await supabase.from('profiles').delete().eq('id', id);
+        if (error) throw error;
+    } catch (e) {
+        console.error('Error deleting profile:', e);
+    }
 };
