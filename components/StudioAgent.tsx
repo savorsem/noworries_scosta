@@ -7,6 +7,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AgentMessage, AgentRole, StoryboardFrame, GenerationMode, VeoModel, AspectRatio, Resolution } from '../types';
 import { createDirectorSession, generateImage, generateVideo } from '../services/geminiService';
+import { saveChatMessage, getChatHistory, saveStoryboardFrame, getStoryboardFrames, logEvent } from '../utils/db';
 import { Send, Clapperboard, Film, Users, MessageSquare, Video, X, Globe, BrainCircuit, Loader2, Sparkles, Activity, Search } from 'lucide-react';
 
 interface StudioAgentProps {
@@ -33,10 +34,31 @@ const StudioAgent: React.FC<StudioAgentProps> = ({ onClose }) => {
     
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    // Initialize session and load history
     useEffect(() => {
+        const initStudio = async () => {
+            try {
+                // 1. Load History
+                const history = await getChatHistory();
+                if (history.length > 0) {
+                    setMessages(history);
+                } else {
+                    const initMsg: AgentMessage = { id: 'init', role: 'Director', text: "Стэнли на связи. Среда производства откалибрована. Каков наш сценарий?", timestamp: Date.now() };
+                    setMessages([initMsg]);
+                    saveChatMessage(initMsg); // Save initial message if new session
+                }
+
+                // 2. Load Frames
+                const savedFrames = await getStoryboardFrames();
+                setFrames(savedFrames);
+            } catch (e) {
+                console.error("Failed to load studio history", e);
+            }
+        };
+
         const s = createDirectorSession(undefined, useThinking);
         setSession(s);
-        setMessages([{ id: 'init', role: 'Director', text: "Стэнли на связи. Среда производства откалибрована. Каков наш сценарий?", timestamp: Date.now() }]);
+        initStudio();
     }, [useThinking]);
 
     useEffect(() => {
@@ -45,51 +67,98 @@ const StudioAgent: React.FC<StudioAgentProps> = ({ onClose }) => {
 
     const handleSend = async () => {
         if (!input.trim() || !session) return;
-        const msg = input;
+        const msgText = input;
         setInput('');
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'Producer', text: `(ДИРЕКТИВА): ${msg}`, timestamp: Date.now(), isAction: true }]);
+        
+        const userMsg: AgentMessage = { id: Date.now().toString(), role: 'Producer', text: `(ДИРЕКТИВА): ${msgText}`, timestamp: Date.now(), isAction: true };
+        setMessages(prev => [...prev, userMsg]);
+        saveChatMessage(userMsg); // Save to DB
+        
         setIsThinking(true);
 
         try {
-            const res = await session.sendMessage({ message: msg });
+            const res = await session.sendMessage({ message: msgText });
             const text = res.text || '';
             
-            if (text.toLowerCase().includes('свет') || text.toLowerCase().includes('объектив')) setCurrentAgent('Cinematographer');
-            else if (text.toLowerCase().includes('сценарий') || text.toLowerCase().includes('персонаж')) setCurrentAgent('Writer');
-            else setCurrentAgent('Director');
+            let role: AgentRole = 'Director';
+            if (text.toLowerCase().includes('свет') || text.toLowerCase().includes('объектив')) role = 'Cinematographer';
+            else if (text.toLowerCase().includes('сценарий') || text.toLowerCase().includes('персонаж')) role = 'Writer';
+            
+            setCurrentAgent(role);
 
             const jsonMatch = text.match(/:::JSON([\s\S]*?):::/);
             if (jsonMatch) {
                 try {
                     const cmd = JSON.parse(jsonMatch[1]);
                     if (cmd.action === 'generate_frame') processFrame(cmd.prompt);
-                } catch {}
+                } catch (e) {
+                    console.error("JSON parse error", e);
+                }
             }
 
-            setMessages(prev => [...prev, { id: Date.now().toString(), role: currentAgent, text: text.replace(/:::JSON[\s\S]*?:::/, ''), timestamp: Date.now() }]);
-        } catch (e) {
-            setMessages(prev => [...prev, { id: 'err', role: 'Director', text: "Сигнал студии прерван. Проверьте админ-панель.", timestamp: Date.now() }]);
+            const cleanText = text.replace(/:::JSON[\s\S]*?:::/, '');
+            const agentMsg: AgentMessage = { id: Date.now().toString(), role: role, text: cleanText, timestamp: Date.now() };
+            
+            setMessages(prev => [...prev, agentMsg]);
+            saveChatMessage(agentMsg); // Save to DB
+
+        } catch (e: any) {
+            const errorMsg: AgentMessage = { id: 'err-' + Date.now(), role: 'Director', text: "Сигнал студии прерван. Проверьте соединение.", timestamp: Date.now() };
+            setMessages(prev => [...prev, errorMsg]);
+            logEvent('error', 'Studio Agent Error', { error: e.message });
         } finally {
             setIsThinking(false);
         }
     };
 
     const processFrame = async (prompt: string) => {
-        const frame: StoryboardFrame = { id: Date.now().toString(), prompt, status: 'generating_image' };
+        const frameId = Date.now().toString();
+        const frame: StoryboardFrame = { id: frameId, prompt, status: 'generating_image' };
+        
         setFrames(prev => [...prev, frame]);
         setActiveTab('monitor');
+        // Save initial state
+        saveStoryboardFrame(frame);
         
         try {
+            // 1. Generate Image
             const b64 = await generateImage(prompt);
-            setFrames(prev => prev.map(f => f.id === frame.id ? { ...f, imageUrl: `data:image/jpeg;base64,${b64}`, status: 'image_ready' } : f));
+            const imageUrl = `data:image/jpeg;base64,${b64}`;
             
-            const { url } = await generateVideo({
+            // Update local state and DB with Image
+            const frameWithImage: StoryboardFrame = { ...frame, imageUrl: imageUrl, status: 'image_ready' };
+            setFrames(prev => prev.map(f => f.id === frameId ? frameWithImage : f));
+            
+            // Save to DB (this handles upload)
+            const savedImageParams = await saveStoryboardFrame(frameWithImage);
+            
+            // 2. Generate Video
+            const { url, blob } = await generateVideo({
                 prompt, model: VeoModel.VEO_FAST, aspectRatio: AspectRatio.LANDSCAPE, resolution: Resolution.P720,
                 mode: GenerationMode.FRAMES_TO_VIDEO, startFrame: { file: new File([], "f.jpg"), base64: b64 }
             });
-            setFrames(prev => prev.map(f => f.id === frame.id ? { ...f, videoUrl: url, status: 'complete' } : f));
-        } catch {
-            setFrames(prev => prev.map(f => f.id === frame.id ? { ...f, status: 'error' } : f));
+
+            // Update local state with local URL for immediate playback
+            setFrames(prev => prev.map(f => f.id === frameId ? { ...f, videoUrl: url, status: 'complete' } : f));
+
+            // 3. Save to DB (Update with Video URL by uploading the blob we got from generateVideo)
+            // We pass the blob URL temporarily, but saveStoryboardFrame needs logic to fetch it if it's a blob url
+            // To make it robust, let's construct the object correctly
+            const finalFrame: StoryboardFrame = { 
+                ...frameWithImage, 
+                // Use the Cloud URL if available from previous save, otherwise keep local
+                imageUrl: savedImageParams?.imageUrl || imageUrl, 
+                videoUrl: url, // saveStoryboardFrame will fetch this blob url and upload it
+                status: 'complete' 
+            };
+            
+            await saveStoryboardFrame(finalFrame);
+            logEvent('info', 'Storyboard frame generated', { prompt });
+
+        } catch (e: any) {
+            setFrames(prev => prev.map(f => f.id === frameId ? { ...f, status: 'error' } : f));
+            saveStoryboardFrame({ ...frame, status: 'error' });
+            logEvent('error', 'Frame generation failed', { error: e.message });
         }
     };
 
@@ -185,7 +254,7 @@ const StudioAgent: React.FC<StudioAgentProps> = ({ onClose }) => {
 
                 <div className="h-40 bg-black/60 border-t border-white/5 p-6 flex gap-6 overflow-x-auto no-scrollbar">
                     {frames.map((f, i) => (
-                        <div key={f.id} className="h-full aspect-video rounded-2xl bg-white/5 border border-white/10 overflow-hidden shrink-0 relative hover:scale-105 transition-all cursor-pointer group">
+                        <div key={f.id} onClick={() => { setFrames(prev => [...prev.filter(x => x.id !== f.id), f]); setActiveTab('monitor'); }} className="h-full aspect-video rounded-2xl bg-white/5 border border-white/10 overflow-hidden shrink-0 relative hover:scale-105 transition-all cursor-pointer group">
                             {f.imageUrl && <img src={f.imageUrl} className="w-full h-full object-cover" />}
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                 <Film size={20}/>

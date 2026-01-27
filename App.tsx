@@ -13,7 +13,7 @@ import StudioAgent from './components/StudioAgent';
 import { generateVideo, editImage, generateCharacterReplacement } from './services/geminiService';
 import { FeedPost, GenerateVideoParams, PostStatus, GenerationMode, AspectRatio, Resolution } from './types';
 import { Clapperboard, Menu, Sparkles, Activity, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { getAllPosts, savePost } from './utils/db';
+import { getAllPosts, savePost, logEvent } from './utils/db';
 
 const App: React.FC = () => {
   const [feed, setFeed] = useState<FeedPost[]>([]);
@@ -64,6 +64,7 @@ const App: React.FC = () => {
 
     setFeed(prev => [newPost, ...prev]);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    logEvent('info', 'Generation started', { mode: params.mode, model: params.model });
 
     try {
         let result;
@@ -82,9 +83,11 @@ const App: React.FC = () => {
         setFeed(prev => prev.map(p => p.id === id ? { ...p, ...update } : p));
         savePost({ ...newPost, ...update }, result.blob);
         showToast("Кинематографичный кадр готов.");
+        logEvent('info', 'Generation success', { postId: id });
     } catch (e: any) {
         setFeed(prev => prev.map(p => p.id === id ? { ...p, status: PostStatus.ERROR, errorMessage: e.message } : p));
         showToast(e.message, 'error');
+        logEvent('error', 'Generation failed', { error: e.message });
     }
   }, []);
 

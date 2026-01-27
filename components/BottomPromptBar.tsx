@@ -6,7 +6,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { AspectRatio, CameoProfile, GenerateVideoParams, GenerationMode, ImageFile, Resolution, VeoModel, VideoFile } from '../types';
-import { ArrowUp, Plus, Wand2, Monitor, Smartphone, X, Loader2, Video, Upload, Film, Sparkles, Eye, Folder, FolderPlus, LayoutGrid, UserCog } from 'lucide-react';
+import { ArrowUp, Plus, Wand2, Monitor, Smartphone, X, Loader2, Video, Upload, Film, Sparkles, Eye, Folder, FolderPlus, LayoutGrid, UserCog, Images, Trash2, Image as ImageIcon, Layers, Copy } from 'lucide-react';
 import { getUserProfiles, saveProfile, deleteProfile } from '../utils/db';
 import { enhancePrompt, analyzeImage } from '../services/geminiService';
 
@@ -80,22 +80,31 @@ interface BottomPromptBarProps {
   onGenerate: (params: GenerateVideoParams) => void;
 }
 
-type TabMode = 'cameo' | 'v2v';
+type TabMode = 'cameo' | 'v2v' | 'frames';
 const ALL_GROUP = 'Все';
 const GENERAL_GROUP = 'Общее';
 
 const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [prompt, setPrompt] = useState('');
-  const [selectedCameoId, setSelectedCameoId] = useState<string | null>(null);
+  
+  // Multi-select for cameos
+  const [selectedCameoIds, setSelectedCameoIds] = useState<string[]>([]);
+  
   const [activeTab, setActiveTab] = useState<TabMode>('cameo');
   const [selectedModel, setSelectedModel] = useState<VeoModel>(VeoModel.VEO_FAST);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.PORTRAIT);
   const [startFrame, setStartFrame] = useState<ImageFile | null>(null);
   const [inputVideo, setInputVideo] = useState<VideoFile | null>(null);
+  const [sequenceFrames, setSequenceFrames] = useState<ImageFile[]>([]);
+  
+  // Batch mode for frames
+  const [isBatchFrameMode, setIsBatchFrameMode] = useState(false);
+
   const [isUploading, setIsUploading] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [profiles, setProfiles] = useState<CameoProfile[]>(defaultCameoProfiles);
   
   // Grouping state
@@ -144,7 +153,12 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
       }
   };
 
-  const handleCameoSelect = (id: string) => setSelectedCameoId(selectedCameoId === id ? null : id);
+  const handleCameoSelect = (id: string) => {
+      setSelectedCameoIds(prev => {
+          if (prev.includes(id)) return prev.filter(pId => pId !== id);
+          return [...prev, id];
+      });
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -162,13 +176,34 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
             };
             await saveProfile(newProfile);
             await loadProfiles();
-            setSelectedCameoId(newProfile.id);
+            setSelectedCameoIds([newProfile.id]); // Select only the new one
         } catch (err) {
             console.error("Загрузка не удалась", err);
         } finally {
             setIsUploading(false);
             e.target.value = ''; 
         }
+    }
+  };
+
+  const handleSequenceUpload = async (files: FileList | null) => {
+    if (!files) return;
+    setIsUploading(true);
+    const newFrames: ImageFile[] = [];
+    
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.type.startsWith('image/')) {
+          const imgFile = await fileToImageFile(file);
+          newFrames.push(imgFile);
+        }
+      }
+      setSequenceFrames(prev => [...prev, ...newFrames]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -195,7 +230,7 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
       if (!id.startsWith('user-')) return;
       if (confirm('Удалить этого персонажа?')) {
           await deleteProfile(id);
-          if (selectedCameoId === id) setSelectedCameoId(null);
+          setSelectedCameoIds(prev => prev.filter(pid => pid !== id));
           await loadProfiles();
       }
   };
@@ -218,13 +253,18 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
       
       let imageToAnalyze: ImageFile | null = null;
       
-      if (activeTab === 'cameo' && selectedCameoId) {
-           const cameo = profiles.find(c => c.id === selectedCameoId);
+      // Prioritize last selected cameo for analysis
+      if (activeTab === 'cameo' && selectedCameoIds.length > 0) {
+           const lastId = selectedCameoIds[selectedCameoIds.length - 1];
+           const cameo = profiles.find(c => c.id === lastId);
            if (cameo && cameo.imageUrl.includes('base64,')) {
                const base64 = cameo.imageUrl.split('base64,')[1];
                imageToAnalyze = { file: new File([], 'cameo.png'), base64 };
            }
+      } else if (activeTab === 'frames' && sequenceFrames.length > 0) {
+           imageToAnalyze = sequenceFrames[0];
       }
+      
       if (!imageToAnalyze && startFrame) {
           imageToAnalyze = startFrame;
       }
@@ -242,34 +282,114 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
       }
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleSequenceUpload(e.dataTransfer.files);
+  };
+
+  const removeFrame = (index: number) => {
+      setSequenceFrames(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (overrideMode?: GenerationMode) => {
-    // If we're doing character replacement, we don't strictly need a prompt as we generate it, 
-    // but if it's normal generation, we might.
-    if (!prompt.trim() && !inputVideo && overrideMode !== GenerationMode.CHARACTER_REPLACEMENT) return;
+    const isCharReplacement = overrideMode === GenerationMode.CHARACTER_REPLACEMENT;
     
-    let mode = overrideMode || GenerationMode.TEXT_TO_VIDEO;
-    let referenceImages: ImageFile[] | undefined;
-    
-    // Character Reference Logic
-    if (selectedCameoId) {
-      const cameo = profiles.find(c => c.id === selectedCameoId);
-      if (cameo) {
-          const res = await fetch(cameo.imageUrl);
-          const blob = await res.blob();
-          const base64 = cameo.imageUrl.includes('base64,') 
-            ? cameo.imageUrl.split('base64,')[1]
-            : ''; 
-          referenceImages = [{ file: new File([blob], 'ref.png', { type: blob.type }), base64 }];
-      }
+    // Basic validation
+    if (!prompt.trim() && !inputVideo && !isCharReplacement && sequenceFrames.length === 0) return;
+
+    // --- BATCH CAMEO PROCESSING ---
+    if (activeTab === 'cameo' && selectedCameoIds.length > 0) {
+        // Iterate through all selected cameos and trigger a generation for each
+        for (const cameoId of selectedCameoIds) {
+            const cameo = profiles.find(c => c.id === cameoId);
+            if (!cameo) continue;
+
+            let referenceImages: ImageFile[] | undefined;
+            try {
+                const res = await fetch(cameo.imageUrl);
+                const blob = await res.blob();
+                const base64 = cameo.imageUrl.includes('base64,') 
+                    ? cameo.imageUrl.split('base64,')[1]
+                    : '';
+                referenceImages = [{ file: new File([blob], 'ref.png', { type: blob.type }), base64 }];
+            } catch (e) {
+                console.error("Failed to load cameo image", e);
+                continue;
+            }
+
+            let mode = GenerationMode.REFERENCES_TO_VIDEO;
+            if (isCharReplacement && inputVideo) {
+                mode = GenerationMode.CHARACTER_REPLACEMENT;
+            }
+
+            onGenerate({
+                prompt: isCharReplacement ? prompt : `${prompt} (Персонаж: ${cameo.name})`, // Append name to differentiate logs/UI
+                model: selectedModel,
+                aspectRatio,
+                resolution: Resolution.P720,
+                mode,
+                referenceImages,
+                inputVideo: inputVideo || undefined,
+                startFrame: startFrame || undefined,
+            });
+        }
+        
+        // Cleanup
+        setPrompt('');
+        setInputVideo(null);
+        setStartFrame(null);
+        setSelectedCameoIds([]);
+        return;
     }
 
-    if (!overrideMode) {
-        if (activeTab === 'v2v' && inputVideo) {
-            mode = GenerationMode.VIDEO_TO_VIDEO;
-        } else if (referenceImages) {
-            mode = GenerationMode.REFERENCES_TO_VIDEO;
+    // --- BATCH / SEQUENCE FRAMES PROCESSING ---
+    if (activeTab === 'frames' && sequenceFrames.length > 0) {
+        if (isBatchFrameMode) {
+             // BATCH MODE: 1 Frame -> 1 Video (Parallel)
+             for (const frame of sequenceFrames) {
+                 onGenerate({
+                     prompt,
+                     model: selectedModel,
+                     aspectRatio,
+                     resolution: Resolution.P720,
+                     mode: GenerationMode.TEXT_TO_VIDEO, // Essentially Image-to-Video
+                     startFrame: frame, // Each frame becomes the start frame for a new video
+                 });
+             }
+        } else {
+            // SEQUENCE MODE: All frames -> 1 Video
+            // We pass sequenceFrames as referenceImages to guide the model, 
+            // and the first frame as startFrame to ensure continuity.
+            onGenerate({
+                prompt,
+                model: selectedModel,
+                aspectRatio,
+                resolution: Resolution.P720,
+                mode: GenerationMode.FRAMES_TO_VIDEO,
+                referenceImages: sequenceFrames,
+                startFrame: sequenceFrames[0]
+            });
         }
+        
+        setPrompt('');
+        setSequenceFrames([]);
+        return;
     }
+
+    // --- STANDARD SINGLE GENERATION ---
+    let mode = overrideMode || GenerationMode.TEXT_TO_VIDEO;
+    if (activeTab === 'v2v' && inputVideo) mode = GenerationMode.VIDEO_TO_VIDEO;
 
     onGenerate({
       prompt,
@@ -277,15 +397,19 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
       aspectRatio,
       resolution: Resolution.P720,
       mode,
-      referenceImages,
-      startFrame, // This will be the first frame of the video if V2V is active
-      inputVideo,
+      startFrame: startFrame || undefined,
+      inputVideo: inputVideo || undefined,
     });
     
     setPrompt('');
     setInputVideo(null);
     setStartFrame(null);
-    setSelectedCameoId(null);
+  };
+
+  const getGenerateButtonText = () => {
+      if (activeTab === 'cameo' && selectedCameoIds.length > 1) return `Пакет (${selectedCameoIds.length})`;
+      if (activeTab === 'frames' && isBatchFrameMode && sequenceFrames.length > 1) return `Пакет (${sequenceFrames.length})`;
+      return undefined; // Render Icon by default
   };
 
   return (
@@ -299,6 +423,7 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
                 {/* Tabs */}
                 <div className="flex bg-black/20 rounded-xl p-1 w-fit mb-2">
                     <button onClick={() => setActiveTab('cameo')} className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === 'cameo' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>Персонаж</button>
+                    <button onClick={() => setActiveTab('frames')} className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === 'frames' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>Кадры</button>
                     <button onClick={() => setActiveTab('v2v')} className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === 'v2v' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>Видео-в-Видео</button>
                 </div>
 
@@ -340,24 +465,102 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
                         <div className="space-y-2">
                              <div className="flex justify-between items-center">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Персонаж для замены</p>
-                                {inputVideo && selectedCameoId && (
+                                {inputVideo && selectedCameoIds.length > 0 && (
                                     <button 
                                         onClick={() => handleSubmit(GenerationMode.CHARACTER_REPLACEMENT)}
                                         className="flex items-center gap-2 px-3 py-1 bg-indigo-600 rounded-lg text-[10px] font-bold uppercase text-white shadow-lg shadow-indigo-500/20 hover:bg-indigo-500 transition-all animate-pulse"
                                     >
                                         <UserCog size={12} />
-                                        Полная замена
+                                        {selectedCameoIds.length > 1 ? `Пакетная замена (${selectedCameoIds.length})` : 'Полная замена'}
                                     </button>
                                 )}
                              </div>
                              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                                 {profiles.map(profile => (
-                                    <div key={profile.id} onClick={() => handleCameoSelect(profile.id)} className={`relative shrink-0 w-10 h-10 rounded-lg border-2 transition-all cursor-pointer overflow-hidden ${selectedCameoId === profile.id ? 'border-indigo-500 scale-105 opacity-100' : 'border-transparent opacity-50 grayscale hover:grayscale-0'}`}>
+                                    <div key={profile.id} onClick={() => handleCameoSelect(profile.id)} className={`relative shrink-0 w-10 h-10 rounded-lg border-2 transition-all cursor-pointer overflow-hidden ${selectedCameoIds.includes(profile.id) ? 'border-indigo-500 scale-105 opacity-100' : 'border-transparent opacity-50 grayscale hover:grayscale-0'}`}>
                                         <img src={profile.imageUrl} alt={profile.name} className="w-full h-full object-cover" />
+                                        {selectedCameoIds.includes(profile.id) && <div className="absolute inset-0 bg-indigo-500/20" />}
                                     </div>
                                 ))}
                              </div>
                         </div>
+                    </div>
+                )}
+
+                {activeTab === 'frames' && (
+                    <div className="bg-white/5 rounded-2xl p-4 border border-white/5 space-y-4">
+                        <div className="flex items-center justify-between mb-2">
+                             <div className="flex gap-2">
+                                 <button 
+                                    onClick={() => setIsBatchFrameMode(false)}
+                                    className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all ${!isBatchFrameMode ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-black/20 text-white/40 hover:bg-black/40'}`}
+                                 >
+                                    <Film size={12} /> Сцена
+                                 </button>
+                                 <button 
+                                    onClick={() => setIsBatchFrameMode(true)}
+                                    className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all ${isBatchFrameMode ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-black/20 text-white/40 hover:bg-black/40'}`}
+                                 >
+                                    <Layers size={12} /> Пакет
+                                 </button>
+                             </div>
+                             <span className="text-[9px] text-white/30 uppercase tracking-widest font-bold">
+                                 {isBatchFrameMode ? "Каждый кадр → Отдельное видео" : "Все кадры → Одно видео"}
+                             </span>
+                        </div>
+
+                        <div 
+                            className={`w-full h-24 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer relative ${isDragging ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/10 hover:border-white/20 hover:bg-white/5'}`}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                        >
+                            <input 
+                                type="file" 
+                                multiple 
+                                accept="image/*" 
+                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                onChange={(e) => handleSequenceUpload(e.target.files)}
+                            />
+                            {isUploading ? (
+                                <Loader2 className="w-6 h-6 text-white/40 animate-spin" />
+                            ) : (
+                                <>
+                                    <Images className={`w-6 h-6 mb-2 ${isDragging ? 'text-indigo-400' : 'text-white/20'}`} />
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">
+                                        {isDragging ? 'Отпустите файлы' : 'Перетащите кадры сюда'}
+                                    </span>
+                                </>
+                            )}
+                        </div>
+
+                        {sequenceFrames.length > 0 && (
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                                        {isBatchFrameMode ? 'Пакет кадров' : 'Сценарий'} ({sequenceFrames.length})
+                                    </span>
+                                    <button onClick={() => setSequenceFrames([])} className="text-[9px] text-red-400 hover:text-red-300 uppercase font-black tracking-wider">Очистить</button>
+                                </div>
+                                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                                    {sequenceFrames.map((frame, idx) => (
+                                        <div key={idx} className="relative shrink-0 w-20 h-14 bg-black rounded-lg overflow-hidden border border-white/10 group">
+                                            <img src={`data:${frame.file.type};base64,${frame.base64}`} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
+                                            <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-black/60 rounded text-[8px] font-mono text-white/80">{idx + 1}</div>
+                                            <button 
+                                                onClick={() => removeFrame(idx)}
+                                                className="absolute top-1 right-1 p-1 bg-red-500/80 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                                            >
+                                                <X size={8} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {sequenceFrames.length === 0 && (
+                            <p className="text-center text-[10px] text-white/20 py-2">Загрузите серию изображений для обработки.</p>
+                        )}
                     </div>
                 )}
 
@@ -384,10 +587,13 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
                             ))}
                         </div>
 
-                        {selectedCameoId && (
+                        {selectedCameoIds.length > 0 && (
                             <div className="flex justify-between items-center px-1">
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">
-                                    {profiles.find(p => p.id === selectedCameoId)?.name || 'Персонаж'}
+                                    {selectedCameoIds.length === 1 
+                                        ? profiles.find(p => p.id === selectedCameoIds[0])?.name || 'Персонаж'
+                                        : `Выбрано: ${selectedCameoIds.length}`
+                                    }
                                 </span>
                                 <button onClick={handleAnalyzeContent} disabled={isAnalyzing} className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-50">
                                     {isAnalyzing ? <Loader2 size={10} className="animate-spin"/> : <Eye size={10} />}
@@ -406,13 +612,14 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
                                 <span className="text-[10px] text-white/20 px-2">Папка пуста</span>
                             ) : (
                                 filteredProfiles.map(profile => (
-                                    <div key={profile.id} onClick={() => handleCameoSelect(profile.id)} className={`relative shrink-0 w-12 h-12 rounded-full border-2 transition-all cursor-pointer overflow-hidden ${selectedCameoId === profile.id ? 'border-indigo-500 scale-110' : 'border-transparent'}`}>
-                                    <img src={profile.imageUrl} alt={profile.name} className="w-full h-full object-cover" />
-                                    {profile.id.startsWith('user-') && (
-                                        <button onClick={(e) => handleRemoveProfile(profile.id, e)} className="absolute top-0 right-0 p-0.5 bg-red-500 rounded-full opacity-0 hover:opacity-100 transition-opacity">
-                                        <X size={8} />
-                                        </button>
-                                    )}
+                                    <div key={profile.id} onClick={() => handleCameoSelect(profile.id)} className={`relative shrink-0 w-12 h-12 rounded-full border-2 transition-all cursor-pointer overflow-hidden ${selectedCameoIds.includes(profile.id) ? 'border-indigo-500 scale-110' : 'border-transparent'}`}>
+                                        <img src={profile.imageUrl} alt={profile.name} className="w-full h-full object-cover" />
+                                        {selectedCameoIds.includes(profile.id) && <div className="absolute inset-0 bg-indigo-500/30 flex items-center justify-center"><div className="w-2 h-2 bg-white rounded-full shadow-lg" /></div>}
+                                        {profile.id.startsWith('user-') && (
+                                            <button onClick={(e) => handleRemoveProfile(profile.id, e)} className="absolute top-0 right-0 p-0.5 bg-red-500 rounded-full opacity-0 hover:opacity-100 transition-opacity z-10">
+                                            <X size={8} />
+                                            </button>
+                                        )}
                                     </div>
                                 ))
                             )}
@@ -444,7 +651,7 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
                 value={prompt}
                 onChange={e => setPrompt(e.target.value)}
                 onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
-                placeholder={activeTab === 'v2v' ? "Опишите, как изменить видео..." : "Опишите ваше кинематографическое видение..."}
+                placeholder={activeTab === 'v2v' ? "Опишите, как изменить видео..." : activeTab === 'frames' ? (isBatchFrameMode ? "Опишите общее действие для всех кадров..." : "Опишите сцену для последовательности...") : "Опишите ваше кинематографическое видение..."}
                 className="w-full bg-transparent p-4 pr-12 text-sm text-white placeholder:text-white/20 resize-none max-h-32 min-h-[56px] focus:outline-none no-scrollbar"
                 rows={1}
               />
@@ -462,8 +669,23 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
                 </button>
               </div>
             </div>
-            <button onClick={() => handleSubmit()} disabled={!prompt.trim() && !inputVideo} className="p-4 rounded-full bg-white text-black disabled:bg-white/10 disabled:text-white/20 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-white/5">
-              <ArrowUp size={20} />
+            <button 
+                onClick={() => handleSubmit()} 
+                disabled={!prompt.trim() && !inputVideo && sequenceFrames.length === 0} 
+                className={`p-4 rounded-full transition-all shadow-xl shadow-white/5 hover:scale-105 active:scale-95 disabled:opacity-50 flex items-center gap-2 ${
+                    (selectedCameoIds.length > 1 || (isBatchFrameMode && sequenceFrames.length > 1)) 
+                    ? 'bg-indigo-600 text-white px-6' 
+                    : 'bg-white text-black'
+                }`}
+            >
+              {getGenerateButtonText() ? (
+                  <>
+                    <span className="text-[10px] font-black uppercase tracking-wider">{getGenerateButtonText()}</span>
+                    <Copy size={16} />
+                  </>
+              ) : (
+                  <ArrowUp size={20} />
+              )}
             </button>
           </div>
         </div>

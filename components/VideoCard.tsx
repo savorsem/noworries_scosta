@@ -176,6 +176,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ post, onUpdate, onUpgrade, onRege
                                 src={`data:image/png;base64,${post.referenceImageBase64}`} 
                                 alt="Постер"
                                 className="w-full h-full object-cover"
+                                style={{ filter: getFilterString() }}
                             />
                         ) : (
                             <div className="w-full h-full bg-gray-950 flex items-center justify-center">

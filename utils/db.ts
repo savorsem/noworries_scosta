@@ -3,7 +3,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { FeedPost, CameoProfile } from '../types';
+import { FeedPost, CameoProfile, AgentMessage, StoryboardFrame } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 // Helper to upload a file (Blob or File) to Supabase Storage
@@ -18,7 +18,7 @@ const uploadFile = async (bucket: string, path: string, file: Blob): Promise<str
 
         if (error) {
             console.warn(`Storage upload warning for ${path}:`, error.message);
-            return null;
+            // Even if upload "fails" (e.g. exists), try to get URL
         }
 
         const { data: { publicUrl } } = supabase.storage
@@ -33,7 +33,7 @@ const uploadFile = async (bucket: string, path: string, file: Blob): Promise<str
 };
 
 // Helper to convert Base64 string to Blob
-const base64ToBlob = async (base64Data: string): Promise<Blob> => {
+export const base64ToBlob = async (base64Data: string): Promise<Blob> => {
     try {
         const response = await fetch(base64Data);
         return await response.blob();
@@ -42,6 +42,8 @@ const base64ToBlob = async (base64Data: string): Promise<Blob> => {
         return new Blob([]);
     }
 };
+
+// --- POSTS (FEED) ---
 
 export const savePost = async (post: FeedPost, videoBlob?: Blob) => {
     try {
@@ -67,7 +69,6 @@ export const savePost = async (post: FeedPost, videoBlob?: Blob) => {
         }
 
         // 2. Save metadata to DB
-        // We strip undefined values to avoid issues with some DB drivers, though Supabase JS handles it mostly fine.
         const { error } = await supabase
             .from('posts')
             .upsert({
@@ -87,10 +88,11 @@ export const savePost = async (post: FeedPost, videoBlob?: Blob) => {
             });
 
         if (error) throw error;
-        console.log("Post saved to Supabase:", postData.id);
+        await logEvent('info', 'Post saved successfully', { postId: postData.id });
 
     } catch (e: any) {
         console.error('Error saving post to Supabase:', e.message || e);
+        await logEvent('error', 'Error saving post', { error: e.message });
     }
 };
 
@@ -119,7 +121,7 @@ export const deletePost = async (id: string) => {
     }
 };
 
-// Profile Functions
+// --- PROFILES (CHARACTERS) ---
 
 export const saveProfile = async (profile: CameoProfile) => {
     try {
@@ -173,5 +175,143 @@ export const deleteProfile = async (id: string) => {
         if (error) throw error;
     } catch (e) {
         console.error('Error deleting profile:', e);
+    }
+};
+
+// --- CHAT HISTORY (STUDIO AGENT) ---
+
+export const saveChatMessage = async (message: AgentMessage) => {
+    try {
+        const { error } = await supabase
+            .from('chat_history')
+            .insert({
+                id: message.id, // Or let DB generate it, but we use client ID for consistency
+                role: message.role,
+                text: message.text,
+                timestamp: new Date(message.timestamp).toISOString(),
+                is_action: message.isAction || false
+            });
+
+        if (error) throw error;
+    } catch (e: any) {
+        console.error('Error saving chat message:', e);
+    }
+};
+
+export const getChatHistory = async (): Promise<AgentMessage[]> => {
+    try {
+        const { data, error } = await supabase
+            .from('chat_history')
+            .select('*')
+            .order('timestamp', { ascending: true })
+            .limit(100);
+
+        if (error) throw error;
+
+        return (data || []).map((row: any) => ({
+            id: row.id,
+            role: row.role,
+            text: row.text,
+            timestamp: new Date(row.timestamp).getTime(),
+            isAction: row.is_action
+        }));
+    } catch (e) {
+        console.error('Error fetching chat history:', e);
+        return [];
+    }
+};
+
+// --- STORYBOARD FRAMES (FRAME-BY-FRAME) ---
+
+export const saveStoryboardFrame = async (frame: StoryboardFrame) => {
+    try {
+        let imageUrl = frame.imageUrl;
+        let videoUrl = frame.videoUrl;
+
+        // Upload Image if base64
+        if (imageUrl && imageUrl.startsWith('data:')) {
+            const blob = await base64ToBlob(imageUrl);
+            const fileName = `sb_img_${frame.id}.jpg`;
+            const url = await uploadFile('images', fileName, blob);
+            if (url) imageUrl = url;
+        }
+
+        // Upload Video if blob url (requires fetching content first, usually handled in component, 
+        // but if passed here as blob url we try to fetch)
+        if (videoUrl && videoUrl.startsWith('blob:')) {
+            try {
+                const res = await fetch(videoUrl);
+                const blob = await res.blob();
+                const fileName = `sb_vid_${frame.id}.mp4`;
+                const url = await uploadFile('videos', fileName, blob);
+                if (url) videoUrl = url;
+            } catch(e) {
+                console.error("Failed to upload frame video blob", e);
+            }
+        }
+
+        const { error } = await supabase
+            .from('storyboard_frames')
+            .upsert({
+                id: frame.id,
+                prompt: frame.prompt,
+                image_url: imageUrl,
+                video_url: videoUrl,
+                status: frame.status,
+                camera_movement: frame.cameraMovement
+            });
+
+        if (error) throw error;
+        
+        // Return updated URLs to update local state
+        return { imageUrl, videoUrl };
+
+    } catch (e: any) {
+        console.error('Error saving storyboard frame:', e);
+        await logEvent('error', 'Error saving storyboard frame', { error: e.message });
+        return null;
+    }
+};
+
+export const getStoryboardFrames = async (): Promise<StoryboardFrame[]> => {
+    try {
+        const { data, error } = await supabase
+            .from('storyboard_frames')
+            .select('*')
+            .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        return (data || []).map((row: any) => ({
+            id: row.id,
+            prompt: row.prompt,
+            imageUrl: row.image_url,
+            videoUrl: row.video_url,
+            status: row.status,
+            cameraMovement: row.camera_movement
+        }));
+    } catch (e) {
+        console.error('Error fetching storyboard frames:', e);
+        return [];
+    }
+};
+
+// --- LOGGING ---
+
+export const logEvent = async (level: 'info' | 'warn' | 'error', message: string, details?: any) => {
+    try {
+        const { error } = await supabase
+            .from('app_logs')
+            .insert({
+                level,
+                message,
+                details: details ? JSON.stringify(details) : null,
+                timestamp: new Date().toISOString()
+            });
+            
+        if (error) console.warn("Failed to write log to DB", error);
+    } catch (e) {
+        // Silent fail for logs to avoid loop
+        console.warn("Logging failed locally", e);
     }
 };
