@@ -308,7 +308,7 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
     // Basic validation
     if (!prompt.trim() && !inputVideo && !isCharReplacement && sequenceFrames.length === 0) return;
 
-    // --- BATCH CAMEO PROCESSING ---
+    // --- BATCH CAMEO PROCESSING (SINGLE TAB) ---
     if (activeTab === 'cameo' && selectedCameoIds.length > 0) {
         // Iterate through all selected cameos and trigger a generation for each
         for (const cameoId of selectedCameoIds) {
@@ -328,24 +328,60 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
                 continue;
             }
 
-            let mode = GenerationMode.REFERENCES_TO_VIDEO;
-            if (isCharReplacement && inputVideo) {
-                mode = GenerationMode.CHARACTER_REPLACEMENT;
-            }
-
             onGenerate({
-                prompt: isCharReplacement ? prompt : `${prompt} (Персонаж: ${cameo.name})`, // Append name to differentiate logs/UI
+                prompt: `${prompt} (Персонаж: ${cameo.name})`,
                 model: selectedModel,
                 aspectRatio,
                 resolution: Resolution.P720,
-                mode,
+                mode: GenerationMode.REFERENCES_TO_VIDEO,
                 referenceImages,
-                inputVideo: inputVideo || undefined,
                 startFrame: startFrame || undefined,
             });
         }
         
         // Cleanup
+        setPrompt('');
+        setInputVideo(null);
+        setStartFrame(null);
+        setSelectedCameoIds([]);
+        return;
+    }
+
+    // --- VIDEO TO VIDEO & CHARACTER REPLACEMENT (V2V TAB) ---
+    if (activeTab === 'v2v' && inputVideo) {
+        let mode = GenerationMode.VIDEO_TO_VIDEO;
+        let referenceImages: ImageFile[] | undefined;
+
+        // If a character is selected in V2V tab, it implies Character Replacement
+        if (selectedCameoIds.length > 0) {
+            mode = GenerationMode.CHARACTER_REPLACEMENT;
+            const cameoId = selectedCameoIds[0];
+            const cameo = profiles.find(c => c.id === cameoId);
+            if (cameo) {
+                try {
+                    const res = await fetch(cameo.imageUrl);
+                    const blob = await res.blob();
+                    const base64 = cameo.imageUrl.includes('base64,') 
+                        ? cameo.imageUrl.split('base64,')[1]
+                        : '';
+                    referenceImages = [{ file: new File([blob], 'ref.png', { type: blob.type }), base64 }];
+                } catch (e) {
+                    console.error("Failed to load replacement character image", e);
+                }
+            }
+        }
+
+        onGenerate({
+            prompt: mode === GenerationMode.CHARACTER_REPLACEMENT ? (prompt || "Character replacement") : prompt,
+            model: selectedModel,
+            aspectRatio,
+            resolution: Resolution.P720,
+            mode,
+            inputVideo,
+            startFrame, // Extracted from video upload
+            referenceImages
+        });
+
         setPrompt('');
         setInputVideo(null);
         setStartFrame(null);
@@ -387,16 +423,13 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
         return;
     }
 
-    // --- STANDARD SINGLE GENERATION ---
-    let mode = overrideMode || GenerationMode.TEXT_TO_VIDEO;
-    if (activeTab === 'v2v' && inputVideo) mode = GenerationMode.VIDEO_TO_VIDEO;
-
+    // --- STANDARD SINGLE GENERATION (Fallback) ---
     onGenerate({
       prompt,
       model: selectedModel,
       aspectRatio,
       resolution: Resolution.P720,
-      mode,
+      mode: GenerationMode.TEXT_TO_VIDEO,
       startFrame: startFrame || undefined,
       inputVideo: inputVideo || undefined,
     });
@@ -409,6 +442,7 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
   const getGenerateButtonText = () => {
       if (activeTab === 'cameo' && selectedCameoIds.length > 1) return `Пакет (${selectedCameoIds.length})`;
       if (activeTab === 'frames' && isBatchFrameMode && sequenceFrames.length > 1) return `Пакет (${sequenceFrames.length})`;
+      if (activeTab === 'v2v' && inputVideo && selectedCameoIds.length > 0) return 'Заменить';
       return undefined; // Render Icon by default
   };
 
@@ -422,9 +456,9 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
                 
                 {/* Tabs */}
                 <div className="flex bg-black/20 rounded-xl p-1 w-fit mb-2">
-                    <button onClick={() => setActiveTab('cameo')} className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === 'cameo' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>Персонаж</button>
-                    <button onClick={() => setActiveTab('frames')} className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === 'frames' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>Кадры</button>
-                    <button onClick={() => setActiveTab('v2v')} className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === 'v2v' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>Видео-в-Видео</button>
+                    <button onClick={() => { setActiveTab('cameo'); setSelectedCameoIds([]); }} className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === 'cameo' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>Персонаж</button>
+                    <button onClick={() => { setActiveTab('frames'); setSelectedCameoIds([]); }} className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === 'frames' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>Кадры</button>
+                    <button onClick={() => { setActiveTab('v2v'); setSelectedCameoIds([]); }} className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === 'v2v' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>Видео-в-Видео</button>
                 </div>
 
                 {activeTab === 'v2v' && (
@@ -462,24 +496,20 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
                              </div>
                         </div>
                         
-                        <div className="space-y-2">
+                        <div className="space-y-2 pt-2 border-t border-white/5">
                              <div className="flex justify-between items-center">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Персонаж для замены</p>
                                 {inputVideo && selectedCameoIds.length > 0 && (
-                                    <button 
-                                        onClick={() => handleSubmit(GenerationMode.CHARACTER_REPLACEMENT)}
-                                        className="flex items-center gap-2 px-3 py-1 bg-indigo-600 rounded-lg text-[10px] font-bold uppercase text-white shadow-lg shadow-indigo-500/20 hover:bg-indigo-500 transition-all animate-pulse"
-                                    >
-                                        <UserCog size={12} />
-                                        {selectedCameoIds.length > 1 ? `Пакетная замена (${selectedCameoIds.length})` : 'Полная замена'}
-                                    </button>
+                                    <span className="text-[9px] font-black uppercase tracking-wider text-green-400">
+                                        Режим замены включен
+                                    </span>
                                 )}
                              </div>
                              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                                 {profiles.map(profile => (
-                                    <div key={profile.id} onClick={() => handleCameoSelect(profile.id)} className={`relative shrink-0 w-10 h-10 rounded-lg border-2 transition-all cursor-pointer overflow-hidden ${selectedCameoIds.includes(profile.id) ? 'border-indigo-500 scale-105 opacity-100' : 'border-transparent opacity-50 grayscale hover:grayscale-0'}`}>
+                                    <div key={profile.id} onClick={() => { setSelectedCameoIds([profile.id]); }} className={`relative shrink-0 w-12 h-12 rounded-xl border-2 transition-all cursor-pointer overflow-hidden ${selectedCameoIds.includes(profile.id) ? 'border-green-500 scale-105 opacity-100' : 'border-transparent opacity-50 grayscale hover:grayscale-0'}`}>
                                         <img src={profile.imageUrl} alt={profile.name} className="w-full h-full object-cover" />
-                                        {selectedCameoIds.includes(profile.id) && <div className="absolute inset-0 bg-indigo-500/20" />}
+                                        {selectedCameoIds.includes(profile.id) && <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center"><UserCog size={16} className="text-white drop-shadow-md"/></div>}
                                     </div>
                                 ))}
                              </div>
@@ -678,7 +708,7 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
                 onClick={() => handleSubmit()} 
                 disabled={!prompt.trim() && !inputVideo && sequenceFrames.length === 0} 
                 className={`p-4 rounded-full transition-all shadow-xl shadow-white/5 hover:scale-105 active:scale-95 disabled:opacity-50 flex items-center gap-2 ${
-                    (selectedCameoIds.length > 1 || (isBatchFrameMode && sequenceFrames.length > 1)) 
+                    (selectedCameoIds.length > 1 || (isBatchFrameMode && sequenceFrames.length > 1) || (activeTab === 'v2v' && selectedCameoIds.length > 0)) 
                     ? 'bg-indigo-600 text-white px-6' 
                     : 'bg-white text-black'
                 }`}

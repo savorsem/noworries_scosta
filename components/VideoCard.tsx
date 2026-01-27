@@ -31,6 +31,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ post, onUpdate, onUpgrade, onRege
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [showControls, setShowControls] = useState(false);
+  const [progress, setProgress] = useState(0);
   
   const lastTapRef = useRef<number>(0);
   const [currentFilters, setCurrentFilters] = useState<VideoFilters>(post.filters || defaultFilters);
@@ -41,6 +42,25 @@ const VideoCard: React.FC<VideoCardProps> = ({ post, onUpdate, onUpgrade, onRege
   useEffect(() => {
     if (post.filters) setCurrentFilters(post.filters);
   }, [post.filters]);
+
+  // Simulated progress for generation
+  useEffect(() => {
+    if (status === PostStatus.GENERATING || status === PostStatus.UPGRADING) {
+        setProgress(5);
+        const interval = setInterval(() => {
+            setProgress(prev => {
+                if (prev >= 98) return 98;
+                // Logarithmic-like slowdown: fast start, slow finish
+                const remaining = 100 - prev;
+                const bump = Math.random() * (remaining / 15);
+                return prev + bump;
+            });
+        }, 800);
+        return () => clearInterval(interval);
+    } else {
+        setProgress(0);
+    }
+  }, [status]);
 
   useEffect(() => {
     if (status === PostStatus.SUCCESS && videoRef.current && isVideoLoaded) {
@@ -98,6 +118,14 @@ const VideoCard: React.FC<VideoCardProps> = ({ post, onUpdate, onUpgrade, onRege
     return `brightness(${currentFilters.brightness}%) contrast(${currentFilters.contrast}%) saturate(${currentFilters.saturate}%) grayscale(${currentFilters.grayscale}%) sepia(${currentFilters.sepia}%)`;
   };
 
+  const getProgressStage = (pct: number) => {
+      if (pct < 15) return "Инициализация...";
+      if (pct < 40) return "Анализ сцены...";
+      if (pct < 70) return "Рендеринг Veo...";
+      if (pct < 90) return "Сборка кадров...";
+      return "Финальная обработка...";
+  };
+
   const renderContent = () => {
     switch (status) {
       case PostStatus.GENERATING:
@@ -114,16 +142,31 @@ const VideoCard: React.FC<VideoCardProps> = ({ post, onUpdate, onUpgrade, onRege
                 )}
               </div>
             )}
-            <div className="relative z-10 flex flex-col items-center gap-6">
-              <div className="w-16 h-16 rounded-full border border-white/10 bg-black/50 backdrop-blur-xl flex items-center justify-center relative">
+            <div className="relative z-10 flex flex-col items-center gap-6 w-full max-w-xs">
+              <div className="w-16 h-16 rounded-full border border-white/10 bg-black/50 backdrop-blur-xl flex items-center justify-center relative shadow-[0_0_30px_rgba(99,102,241,0.3)]">
                   <div className="absolute inset-0 rounded-full border-t-2 border-r-2 border-indigo-400 animate-spin"></div>
                   <VeoLogo className="w-6 h-6 text-white" />
               </div>
-              <div className="space-y-2 max-w-[240px]">
-                <p className="text-xs font-bold uppercase tracking-widest text-white/70 animate-pulse">
-                    {status === PostStatus.UPGRADING ? 'Улучшение до 1080p Master' : 'Этап производства'}
-                </p>
-                <p className="text-[10px] text-white/40 line-clamp-2 leading-relaxed">"{post.description}"</p>
+              
+              <div className="space-y-3 w-full">
+                <div className="flex justify-between items-end px-1">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-300 animate-pulse">
+                         {status === PostStatus.UPGRADING ? 'Улучшение' : getProgressStage(progress)}
+                    </span>
+                    <span className="text-[10px] font-mono text-white/60">{Math.round(progress)}%</span>
+                </div>
+                
+                {/* Progress Bar */}
+                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <motion.div 
+                        className="h-full bg-gradient-to-r from-indigo-600 to-purple-500"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progress}%` }}
+                        transition={{ type: 'spring', bounce: 0, duration: 0.5 }}
+                    />
+                </div>
+
+                <p className="text-[10px] text-white/40 line-clamp-2 leading-relaxed pt-1">"{post.description}"</p>
               </div>
             </div>
           </div>

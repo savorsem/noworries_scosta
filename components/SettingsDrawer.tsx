@@ -5,7 +5,7 @@
 */
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Activity, Palette, Settings, Zap, Key, Server, Database, ShieldCheck, HeartPulse, Plug2, Save, Cloud, Terminal } from 'lucide-react';
+import { X, Activity, Palette, Settings, Zap, Key, Server, Database, ShieldCheck, HeartPulse, Plug2, Save, Cloud, Terminal, Sun, Moon } from 'lucide-react';
 import { testApiConnection } from '../services/geminiService';
 import { healer } from '../services/healerService';
 import { SystemHealth, GlobalSettings } from '../types';
@@ -44,7 +44,12 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ isOpen, onClose, curren
     const saved = localStorage.getItem('global_settings');
     if (saved) {
         try {
-            setSettings(JSON.parse(saved));
+            const parsed = JSON.parse(saved);
+            setSettings(parsed);
+            // If theme in saved settings differs from current prop (init), update app
+            if (parsed.theme && parsed.theme !== currentTheme) {
+                onThemeChange(parsed.theme);
+            }
         } catch (e) { console.error("Settings parse error", e); }
     }
   }, []);
@@ -57,11 +62,12 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ isOpen, onClose, curren
 
   // Auto-save on change
   useEffect(() => {
-      localStorage.setItem('global_settings', JSON.stringify(settings));
+      const newSettings = { ...settings, theme: currentTheme };
+      localStorage.setItem('global_settings', JSON.stringify(newSettings));
       if (settings.syncToSupabase) {
-          syncUserSettings(settings).catch(console.error);
+          syncUserSettings(newSettings).catch(console.error);
       }
-  }, [settings]);
+  }, [settings, currentTheme]);
 
   const handleIntegrationChange = (key: keyof typeof settings.integrations, value: string) => {
       setSettings(prev => ({
@@ -87,11 +93,24 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ isOpen, onClose, curren
               return (
                   <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
                       <section className="space-y-4">
-                          <div className="flex items-center gap-3 text-[11px] font-black uppercase tracking-[0.2em] text-white/30"><Palette size={14}/> Внешний вид</div>
-                          <div className="grid grid-cols-3 gap-3">
-                              {['Obsidian', 'Neon', 'Sunset'].map(t => (
-                                  <button key={t} onClick={() => onThemeChange(t.toLowerCase())} className={`py-4 rounded-xl border transition-all text-[9px] font-black uppercase tracking-widest ${currentTheme === t.toLowerCase() ? 'bg-white text-black border-white' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}>{t}</button>
-                              ))}
+                          <div className="flex items-center gap-3 text-[11px] font-black uppercase tracking-[0.2em] text-white/30"><Palette size={14}/> Интерфейс</div>
+                          <div className="grid grid-cols-2 gap-3">
+                              {['Obsidian', 'Light', 'Neon', 'Sunset'].map(t => {
+                                  const isActive = currentTheme === t.toLowerCase();
+                                  return (
+                                    <button 
+                                        key={t} 
+                                        onClick={() => onThemeChange(t.toLowerCase())} 
+                                        className={`group relative p-4 rounded-2xl border transition-all overflow-hidden ${isActive ? 'bg-white border-white' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}
+                                    >
+                                        <div className="flex items-center justify-between relative z-10">
+                                            <span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-black' : 'text-white/60 group-hover:text-white'}`}>{t}</span>
+                                            {t === 'Light' ? <Sun size={14} className={isActive ? 'text-black' : 'text-white/40'}/> : <Moon size={14} className={isActive ? 'text-black' : 'text-white/40'}/>}
+                                        </div>
+                                        {isActive && <div className="absolute inset-0 bg-gradient-to-br from-transparent to-black/5 pointer-events-none" />}
+                                    </button>
+                                  );
+                              })}
                           </div>
                       </section>
                       <section className="space-y-4">
@@ -99,9 +118,9 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ isOpen, onClose, curren
                           <div className="bg-white/5 rounded-2xl p-4 space-y-4 border border-white/5">
                               <div className="flex items-center justify-between">
                                   <span className="text-xs text-white/80 font-medium">Облако Supabase</span>
-                                  <div className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${settings.syncToSupabase ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                  <button onClick={() => setSettings(s => ({...s, syncToSupabase: !s.syncToSupabase}))} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-colors ${settings.syncToSupabase ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                                       {settings.syncToSupabase ? 'АКТИВНО' : 'ОТКЛЮЧЕНО'}
-                                  </div>
+                                  </button>
                               </div>
                               <div className="flex items-center justify-between">
                                   <span className="text-xs text-white/80 font-medium">Локальное хранилище</span>
@@ -110,7 +129,7 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ isOpen, onClose, curren
                               <button 
                                 onClick={async () => { setIsSyncing(true); await syncUserSettings(settings); setTimeout(() => setIsSyncing(false), 1000); }} 
                                 disabled={isSyncing}
-                                className="w-full py-2 bg-indigo-600 rounded-lg text-white text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-500 transition-colors"
+                                className="w-full py-2 bg-indigo-600 rounded-lg text-white text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20"
                               >
                                   {isSyncing ? <Loader2 className="animate-spin w-3 h-3"/> : <Cloud size={12} />}
                                   Синхронизировать принудительно
@@ -134,7 +153,7 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ isOpen, onClose, curren
                                 value={settings.integrations.customProxyUrl} 
                                 onChange={e => handleIntegrationChange('customProxyUrl', e.target.value)} 
                                 placeholder="https://api.proxy.com/v1" 
-                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:border-indigo-500 outline-none transition-all font-mono" 
+                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:border-indigo-500 outline-none transition-all font-mono placeholder:text-white/20" 
                               />
                           </div>
                           
@@ -147,7 +166,7 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ isOpen, onClose, curren
                                 value={settings.integrations.elevenLabsKey} 
                                 onChange={e => handleIntegrationChange('elevenLabsKey', e.target.value)} 
                                 placeholder="sk_..." 
-                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:border-indigo-500 outline-none transition-all font-mono" 
+                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:border-indigo-500 outline-none transition-all font-mono placeholder:text-white/20" 
                               />
                           </div>
 
@@ -158,7 +177,7 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ isOpen, onClose, curren
                                 value={settings.integrations.midjourneyKey} 
                                 onChange={e => handleIntegrationChange('midjourneyKey', e.target.value)} 
                                 placeholder="mj_..." 
-                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:border-indigo-500 outline-none transition-all font-mono" 
+                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:border-indigo-500 outline-none transition-all font-mono placeholder:text-white/20" 
                               />
                           </div>
                       </div>

@@ -129,7 +129,7 @@ const App: React.FC = () => {
   }, [handleGenerate]);
 
   return (
-    <div className={`h-[100dvh] w-screen flex flex-col overflow-hidden bg-black font-sans selection:bg-white/10 ${theme}`} data-theme={theme}>
+    <div className={`h-[100dvh] w-screen flex flex-col overflow-hidden font-sans selection:bg-white/10 ${theme}`} data-theme={theme} style={{ backgroundColor: 'var(--theme-bg)' }}>
       <AnimatePresence>{showKeyDialog && <ApiKeyDialog onContinue={() => setShowKeyDialog(false)} />}</AnimatePresence>
       <SettingsDrawer isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} currentTheme={theme} onThemeChange={setTheme} />
       <AnimatePresence>{isStudioOpen && <StudioAgent onClose={() => setIsStudioOpen(false)} />}</AnimatePresence>
@@ -144,9 +144,9 @@ const App: React.FC = () => {
       </AnimatePresence>
       
       <main className="flex-1 h-full relative overflow-y-auto no-scrollbar pb-40">
-        <header className="sticky top-0 z-40 w-full px-6 py-5 flex items-center justify-between bg-black/50 backdrop-blur-2xl border-b border-white/5">
+        <header className="sticky top-0 z-40 w-full px-6 py-5 flex items-center justify-between bg-black/50 backdrop-blur-2xl border-b border-white/5 transition-colors duration-300">
             <div className="flex items-center gap-5">
-                <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all"><Menu size={18}/></button>
+                <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all text-white"><Menu size={18}/></button>
                 <div className="flex items-center gap-3">
                     <Clapperboard className="w-7 h-7 text-red-600" />
                     <h1 className="font-black text-2xl tracking-tighter text-white uppercase italic">БЕЗ ТРЕВОГ</h1>
@@ -177,8 +177,8 @@ const App: React.FC = () => {
               ))}
               {feed.length === 0 && (
                   <div className="col-span-full h-[60vh] flex flex-col items-center justify-center opacity-10">
-                      <Clapperboard size={80} className="mb-6"/>
-                      <span className="text-xl font-black uppercase tracking-[0.4em]">Студия пуста</span>
+                      <Clapperboard size={80} className="mb-6 text-white"/>
+                      <span className="text-xl font-black uppercase tracking-[0.4em] text-white">Студия пуста</span>
                   </div>
               )}
             </AnimatePresence>

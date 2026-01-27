@@ -43,14 +43,16 @@ self.addEventListener('fetch', (event) => {
   // Skip cross-origin requests that aren't http/https (e.g. chrome-extension://)
   if (!url.protocol.startsWith('http')) return;
 
-  // 1. Media Caching Strategy (Cache First with Expiration Check)
-  // Cache images, videos, and fonts for a longer time
-  if (
+  // 1. Optimized Media Caching Strategy (Cache First + 30 Day Expiration)
+  // Covers images, videos, audio, fonts
+  const isMedia = 
       event.request.destination === 'image' || 
       event.request.destination === 'video' || 
+      event.request.destination === 'audio' || 
       event.request.destination === 'font' ||
-      url.pathname.match(/\.(mp4|webm|avif|png|jpg|jpeg|webp|svg|gif|ico)$/i)
-  ) {
+      url.pathname.match(/\.(mp4|webm|avif|png|jpg|jpeg|webp|svg|gif|ico|mp3|wav|ogg)$/i);
+
+  if (isMedia) {
     event.respondWith(
       caches.open(MEDIA_CACHE_NAME).then(async (cache) => {
         const cachedResponse = await cache.match(event.request);
@@ -61,8 +63,10 @@ self.addEventListener('fetch', (event) => {
           if (dateHeader) {
             const cachedDate = new Date(dateHeader);
             const now = new Date();
+            
             // If cache is older than 30 days, try to refresh
             if (now.getTime() - cachedDate.getTime() > CACHE_EXPIRATION_MS) {
+               // console.log('[SW] Refreshing expired media:', url.pathname);
                return fetch(event.request).then((networkResponse) => {
                   if (networkResponse.ok) {
                      cache.put(event.request, networkResponse.clone());
@@ -72,9 +76,11 @@ self.addEventListener('fetch', (event) => {
                }).catch(() => cachedResponse); // Fallback to stale if offline
             }
           }
+          // Return valid cache hit
           return cachedResponse;
         }
 
+        // Cache Miss: Fetch from network and cache
         return fetch(event.request).then((networkResponse) => {
           // Only cache valid responses
           if (networkResponse.ok) {
@@ -100,7 +106,7 @@ self.addEventListener('fetch', (event) => {
          return networkResponse;
       }).catch((err) => {
          // Network failed, nothing to do
-         console.debug('Background fetch failed', err);
+         // console.debug('Background fetch failed', err);
       });
       
       return cachedResponse || fetchPromise;
@@ -108,13 +114,12 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// NEW: Listen for manual cache clear messages from the client
+// Listen for manual cache clear messages from the client (used by Healer Agent)
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'CLEAR_MEDIA_CACHE') {
     event.waitUntil(
       caches.delete(MEDIA_CACHE_NAME).then(() => {
-        console.log('Media cache cleared manually');
-        // Reply to the client to confirm
+        console.log('Media cache cleared manually via Healer');
         if (event.ports && event.ports[0]) {
             event.ports[0].postMessage({ success: true });
         }

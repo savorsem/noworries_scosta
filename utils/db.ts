@@ -150,7 +150,22 @@ export const deletePost = async (id: string) => {
 
 // --- PROFILES (CHARACTERS) ---
 
+const LOCAL_PROFILES_KEY = 'noworries_local_profiles';
+
 export const saveProfile = async (profile: CameoProfile) => {
+    // 1. SAVE LOCALLY FIRST (Reliability)
+    try {
+        const stored = localStorage.getItem(LOCAL_PROFILES_KEY);
+        const localProfiles: CameoProfile[] = stored ? JSON.parse(stored) : [];
+        
+        // Remove existing if any, append new
+        const updated = [...localProfiles.filter(p => p.id !== profile.id), profile];
+        localStorage.setItem(LOCAL_PROFILES_KEY, JSON.stringify(updated));
+    } catch (e) {
+        console.error("Failed to save profile locally", e);
+    }
+
+    // 2. ATTEMPT CLOUD SYNC (Optional/Background)
     try {
         let finalImageUrl = profile.imageUrl;
 
@@ -175,33 +190,67 @@ export const saveProfile = async (profile: CameoProfile) => {
                 "group": profile.group
             });
 
-        if (error) throw error;
+        if (error) console.warn("Cloud sync failed for profile, using local only", error.message);
     } catch (e) {
-        console.error('Error saving profile:', e);
+        console.warn('Error saving profile to cloud (ignoring):', e);
     }
 };
 
 export const getUserProfiles = async (): Promise<CameoProfile[]> => {
+    let profiles: CameoProfile[] = [];
+
+    // 1. Load Local
+    try {
+        const stored = localStorage.getItem(LOCAL_PROFILES_KEY);
+        if (stored) {
+            profiles = JSON.parse(stored);
+        }
+    } catch (e) {
+        console.error("Failed to load local profiles", e);
+    }
+
+    // 2. Try Cloud (and merge if successful)
     try {
         const { data, error } = await supabase
             .from('profiles')
             .select('*')
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
-        return (data as CameoProfile[]) || [];
+        if (!error && data) {
+            const cloudProfiles = data as CameoProfile[];
+            // Merge: Cloud overwrites local if ID matches (assuming cloud is source of truth if connected),
+            // OR we just append cloud ones that aren't in local.
+            // Simple approach: Union based on ID
+            const localIds = new Set(profiles.map(p => p.id));
+            const newFromCloud = cloudProfiles.filter(p => !localIds.has(p.id));
+            profiles = [...profiles, ...newFromCloud];
+        }
     } catch (e) {
-        console.error('Error fetching profiles:', e);
-        return [];
+        console.warn('Error fetching profiles from cloud:', e);
     }
+
+    return profiles;
 };
 
 export const deleteProfile = async (id: string) => {
+    // 1. Delete Local
+    try {
+        const stored = localStorage.getItem(LOCAL_PROFILES_KEY);
+        if (stored) {
+            const profiles: CameoProfile[] = JSON.parse(stored);
+            const updated = profiles.filter(p => p.id !== id);
+            localStorage.setItem(LOCAL_PROFILES_KEY, JSON.stringify(updated));
+        }
+    } catch (e) {
+        console.error("Failed to delete local profile", e);
+    }
+
+    // 2. Delete Cloud
     try {
         const { error } = await supabase.from('profiles').delete().eq('id', id);
-        if (error) throw error;
+        if (error) console.warn("Failed to delete from cloud", error.message);
     } catch (e) {
-        console.error('Error deleting profile:', e);
+        console.warn('Error deleting profile from cloud:', e);
     }
 };
 
