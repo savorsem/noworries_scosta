@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -9,12 +8,17 @@ import { AgentMessage, AgentRole, StoryboardFrame, GenerationMode, VeoModel, Asp
 import { createDirectorSession, generateImage, generateVideo } from '../services/geminiService';
 import { saveChatMessage, getChatHistory, saveStoryboardFrame, getStoryboardFrames, logEvent } from '../utils/db';
 import { Send, Clapperboard, Film, Users, MessageSquare, Video, X, Globe, BrainCircuit, Loader2, Sparkles, Activity, Search } from 'lucide-react';
+import { toErrorMessage } from '../utils/errors';
+
+type DirectorSession = {
+  sendMessage: (args: { message: string }) => Promise<{ text?: string }>;
+};
 
 interface StudioAgentProps {
     onClose: () => void;
 }
 
-const AGENT_META: Record<AgentRole, { color: string, icon: any, name: string }> = {
+const AGENT_META: Record<AgentRole, { color: string, icon: React.ComponentType<{ size?: number; className?: string }>, name: string }> = {
     Director: { color: 'text-red-500', icon: Clapperboard, name: 'СТЭНЛИ (Режиссер)' },
     Producer: { color: 'text-green-500', icon: Users, name: 'МАРКУС (Продюсер)' },
     Writer: { color: 'text-blue-500', icon: MessageSquare, name: 'ХЛОЯ (Сценарист)' },
@@ -29,7 +33,7 @@ const StudioAgent: React.FC<StudioAgentProps> = ({ onClose }) => {
     const [isThinking, setIsThinking] = useState(false);
     const [activeTab, setActiveTab] = useState<'monitor' | 'crew'>('monitor');
     const [useThinking, setUseThinking] = useState(false);
-    const [session, setSession] = useState<any>(null);
+    const [session, setSession] = useState<DirectorSession | null>(null);
     const [currentAgent, setCurrentAgent] = useState<AgentRole>('Director');
     
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -56,7 +60,7 @@ const StudioAgent: React.FC<StudioAgentProps> = ({ onClose }) => {
             }
         };
 
-        const s = createDirectorSession(undefined, useThinking);
+        const s = createDirectorSession(undefined, useThinking) as unknown as DirectorSession;
         setSession(s);
         initStudio();
     }, [useThinking]);
@@ -102,10 +106,10 @@ const StudioAgent: React.FC<StudioAgentProps> = ({ onClose }) => {
             setMessages(prev => [...prev, agentMsg]);
             saveChatMessage(agentMsg); // Save to DB
 
-        } catch (e: any) {
+        } catch (e: unknown) {
             const errorMsg: AgentMessage = { id: 'err-' + Date.now(), role: 'Director', text: "Сигнал студии прерван. Проверьте соединение.", timestamp: Date.now() };
             setMessages(prev => [...prev, errorMsg]);
-            logEvent('error', 'Studio Agent Error', { error: e.message });
+            logEvent('error', 'Studio Agent Error', { error: toErrorMessage(e) });
         } finally {
             setIsThinking(false);
         }
@@ -155,10 +159,10 @@ const StudioAgent: React.FC<StudioAgentProps> = ({ onClose }) => {
             await saveStoryboardFrame(finalFrame);
             logEvent('info', 'Storyboard frame generated', { prompt });
 
-        } catch (e: any) {
+        } catch (e: unknown) {
             setFrames(prev => prev.map(f => f.id === frameId ? { ...f, status: 'error' } : f));
             saveStoryboardFrame({ ...frame, status: 'error' });
-            logEvent('error', 'Frame generation failed', { error: e.message });
+            logEvent('error', 'Frame generation failed', { error: toErrorMessage(e) });
         }
     };
 

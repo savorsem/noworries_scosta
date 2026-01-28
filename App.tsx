@@ -13,6 +13,7 @@ import { generateVideo, editImage, generateCharacterReplacement } from './servic
 import { FeedPost, GenerateVideoParams, PostStatus, GenerationMode, AspectRatio, Resolution } from './types';
 import { Clapperboard, Menu, Sparkles, Activity, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { getAllPosts, savePost, logEvent } from './utils/db';
+import { toErrorMessage } from './utils/errors';
 
 declare global {
   interface Window {
@@ -93,10 +94,10 @@ const App: React.FC = () => {
       savePost({ ...newPost, ...update }, result.blob);
       showToast('Кинематографичный кадр готов.');
       logEvent('info', 'Generation success', { postId: id });
-    } catch (e: any) {
-      setFeed(prev => prev.map(p => (p.id === id ? { ...p, status: PostStatus.ERROR, errorMessage: e.message } : p)));
-      showToast(e.message, 'error');
-      logEvent('error', 'Generation failed', { error: e.message });
+    } catch (e: unknown) {
+      setFeed(prev => prev.map(p => (p.id === id ? { ...p, status: PostStatus.ERROR, errorMessage: toErrorMessage(e) } : p)));
+      showToast(toErrorMessage(e), 'error');
+      logEvent('error', 'Generation failed', { error: toErrorMessage(e) });
     }
   }, []);
 
@@ -125,9 +126,9 @@ const App: React.FC = () => {
       setFeed(prev => prev.map(p => (p.id === post.id ? { ...p, ...update } : p)));
       savePost({ ...post, ...update }, result.blob);
       showToast('Улучшение до 1080p завершено.', 'success');
-    } catch (e: any) {
+    } catch (e: unknown) {
       setFeed(prev => prev.map(p => (p.id === post.id ? { ...p, status: PostStatus.SUCCESS } : p)));
-      showToast(`Ошибка улучшения: ${e.message}`, 'error');
+      showToast(`Ошибка улучшения: ${toErrorMessage(e)}`, 'error');
     }
   }, []);
 
