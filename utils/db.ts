@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -9,7 +8,7 @@ import { healer } from '../services/healerService';
 
 const uploadFile = async (bucket: string, path: string, file: Blob): Promise<string | null> => {
     try {
-        const { data, error } = await supabase.storage
+        const { error } = await supabase.storage
             .from(bucket)
             .upload(path, file, {
                 cacheControl: '3600',
@@ -18,6 +17,7 @@ const uploadFile = async (bucket: string, path: string, file: Blob): Promise<str
 
         if (error) {
             console.warn(`Storage upload warning for ${path}:`, error.message);
+            return null;
         }
 
         const { data: { publicUrl } } = supabase.storage
@@ -43,8 +43,11 @@ export const base64ToBlob = async (base64Data: string): Promise<Blob> => {
 
 export const syncUserSettings = async (settings: GlobalSettings) => {
     try {
-        const userId = localStorage.getItem('user_uuid') || 'anonymous_user';
-        if (!localStorage.getItem('user_uuid')) localStorage.setItem('user_uuid', userId);
+        let userId = localStorage.getItem('user_uuid');
+        if (!userId) {
+            userId = crypto.randomUUID();
+            localStorage.setItem('user_uuid', userId);
+        }
 
         const { error } = await supabase
             .from('user_settings')
@@ -66,7 +69,13 @@ export const savePost = async (post: FeedPost, videoBlob?: Blob) => {
         if (videoBlob) {
             const fileName = `${post.id}.mp4`;
             const publicUrl = await uploadFile('videos', fileName, videoBlob);
-            if (publicUrl) postData.videoUrl = publicUrl;
+            if (publicUrl) {
+                postData.videoUrl = publicUrl;
+            } else {
+                console.error("Failed to upload video, saving post without URL");
+                postData.status = 'error'; // Use string literal or enum if available
+                postData.errorMessage = "Video upload failed";
+            }
         }
         const { error } = await supabase
             .from('posts')
@@ -86,8 +95,9 @@ export const savePost = async (post: FeedPost, videoBlob?: Blob) => {
                 "originalParams": postData.originalParams,
             });
         if (error) throw error;
-    } catch (e: any) {
-        console.error('Error saving post:', e.message || e);
+    } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.error('Error saving post:', message);
     }
 };
 
@@ -203,7 +213,7 @@ export const deleteStoryboardFrame = async (id: string) => {
     } catch (e) {}
 };
 
-export const logEvent = async (level: 'info' | 'warn' | 'error', message: string, details?: any) => {
+export const logEvent = async (level: 'info' | 'warn' | 'error', message: string, details?: unknown) => {
     try {
         if (level === 'error') healer.reportError(message);
         await supabase.from('app_logs').insert({ level, message, details: JSON.stringify(details), timestamp: new Date().toISOString() });

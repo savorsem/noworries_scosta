@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -10,14 +9,15 @@ import { createDirectorSession, generateImage, generateVideo, generateCharacterR
 import { saveChatMessage, getChatHistory, saveStoryboardFrame, getStoryboardFrames, deleteStoryboardFrame } from '../utils/db';
 import { 
   Send, Clapperboard, Film, Users, MessageSquare, Video as VideoIcon, X, 
-  Loader2, Sparkles, Plus, UserCircle, Trash2, Database, Zap, Download, AlertCircle, RefreshCw
+  Loader2, Sparkles, Plus, UserCircle, Trash2, Database, Zap, Download, AlertCircle, RefreshCw, LucideIcon
 } from 'lucide-react';
+import { Chat } from '@google/genai';
 
 interface StudioAgentProps {
     onClose: () => void;
 }
 
-const AGENT_META: Record<AgentRole, { color: string, icon: any, name: string, bg: string }> = {
+const AGENT_META: Record<AgentRole, { color: string, icon: LucideIcon, name: string, bg: string }> = {
     Director: { color: 'text-white', icon: Clapperboard, name: 'СТЭНЛИ', bg: 'bg-indigo-600' },
     Producer: { color: 'text-green-400', icon: Users, name: 'МАРКУС', bg: 'bg-green-500/10' },
     Writer: { color: 'text-blue-400', icon: MessageSquare, name: 'ХЛОЯ', bg: 'bg-blue-500/10' },
@@ -33,7 +33,7 @@ const StudioAgent: React.FC<StudioAgentProps> = ({ onClose }) => {
     const [input, setInput] = useState('');
     const [isThinking, setIsThinking] = useState(false);
     const [useThinking, setUseThinking] = useState(true);
-    const [session, setSession] = useState<any>(null);
+    const [session, setSession] = useState<Chat | null>(null);
     const [activeView, setActiveView] = useState<ViewMode>('terminal');
     const [assets, setAssets] = useState<{ images: ImageFile[], videos: VideoFile[] }>({ images: [], videos: [] });
     
@@ -154,7 +154,7 @@ const StudioAgent: React.FC<StudioAgentProps> = ({ onClose }) => {
                                 </button>
                             </div>
                         </section>
-                        <input type="file" ref={fileInputRef} className="hidden" multiple onChange={(e) => {
+                        <input type=\"file\" ref={fileInputRef} className=\"hidden\" multiple onChange={(e) => {
                             const files = e.target.files;
                             if (!files) return;
                             for (let i = 0; i < files.length; i++) {
