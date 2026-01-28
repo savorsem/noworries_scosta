@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { AnimatePresence, motion } from 'framer-motion';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, Component, ErrorInfo, ReactNode } from 'react';
 import ApiKeyDialog from './components/ApiKeyDialog';
 import BottomPromptBar from './components/BottomPromptBar';
 import VideoCard from './components/VideoCard';
@@ -15,7 +15,42 @@ import { FeedPost, GenerateVideoParams, PostStatus, GenerationMode, Resolution }
 import { Clapperboard, Menu, Sparkles, Activity, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { getAllPosts, savePost } from './utils/db';
 
-const App: React.FC = () => {
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean, error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex h-screen w-screen flex-col items-center justify-center bg-black text-white p-8 text-center">
+          <AlertCircle size={48} className="text-red-500 mb-4" />
+          <h1 className="text-2xl font-bold mb-2">Something went wrong</h1>
+          <p className="text-white/60 mb-4 max-w-md">{this.state.error?.message}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-white text-black rounded-full font-bold hover:bg-white/90"
+          >
+            Reload Application
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+const AppContent: React.FC = () => {
   const [feed, setFeed] = useState<FeedPost[]>([]);
   const [showKeyDialog, setShowKeyDialog] = useState(false);
   const [toast, setToast] = useState<{msg: string, type: 'error' | 'success'} | null>(null);
@@ -24,20 +59,29 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState('obsidian');
 
   useEffect(() => {
+    console.log("App mounted");
     const checkKeySelection = async () => {
-      const aistudio = (window as any).aistudio;
-      // Check environment variable (Vite style)
-      const envKey = import.meta.env.VITE_GEMINI_API_KEY;
+      try {
+        const aistudio = (window as any).aistudio;
+        // Check environment variable (Vite style)
+        const envKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-      if (aistudio) {
-        const hasKey = await aistudio.hasSelectedApiKey();
-        if (!hasKey && !envKey) setShowKeyDialog(true);
-      } else if (!envKey) {
-          setShowKeyDialog(true);
+        if (aistudio) {
+          const hasKey = await aistudio.hasSelectedApiKey();
+          if (!hasKey && !envKey) setShowKeyDialog(true);
+        } else if (!envKey) {
+            setShowKeyDialog(true);
+        }
+      } catch (e) {
+        console.error("Error checking API key:", e);
       }
     };
     checkKeySelection();
-    getAllPosts().then(posts => setFeed(posts || []));
+    
+    getAllPosts().then(posts => {
+        console.log("Posts fetched:", posts?.length);
+        setFeed(posts || []);
+    }).catch(e => console.error("Failed to load posts:", e));
   }, []);
 
   const showToast = (msg: string, type: 'error' | 'success' = 'success') => {
@@ -143,6 +187,14 @@ const App: React.FC = () => {
 
       <BottomPromptBar onGenerate={handleGenerate} />
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
   );
 };
 
