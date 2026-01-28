@@ -1,20 +1,36 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# veo-studio
 
-# Run and deploy your AI Studio app
+## Deploy
 
-This contains everything you need to run your app locally.
+Vercel build: `vite build` output: `dist`
 
-View your app in AI Studio: https://ai.studio/apps/drive/1SpKHSpSrI2h85nNbXI5VgQyeRbwRzUPO
+## Admin → Integrations
 
-## Run Locally
+This project includes an **Admin Integrations** panel (passcode protected) to manage provider keys/tokens server-side.
 
-**Prerequisites:**  Node.js
+### Required Vercel Environment Variables
 
+- `ADMIN_PASSCODE` — passcode for the admin panel
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY` (server-only)
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Optional (client):
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_KEY`
+
+### Supabase
+
+Run migration:
+- `supabase/migrations/0001_integrations.sql`
+
+Notes:
+- `integrations` table has RLS enabled and **no policies** by default (client cannot access).
+- Serverless API uses Service Role key.
+
+### API
+
+- `GET /api/integrations` (admin)
+- `POST /api/integrations` (admin)
+- `POST /api/integrations/test` (admin)
+
+Admin auth: send header `x-admin-passcode: <ADMIN_PASSCODE>`
