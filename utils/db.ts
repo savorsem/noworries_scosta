@@ -33,20 +33,8 @@ const uploadFile = async (bucket: string, path: string, file: Blob): Promise<str
 
 export const base64ToBlob = async (base64Data: string): Promise<Blob> => {
     try {
-        // Check if it's a data URL
-        if (base64Data.startsWith('data:')) {
-            const response = await fetch(base64Data);
-            return await response.blob();
-        }
-
-        // Handle raw base64 string
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        return new Blob([byteArray]);
+        const response = await fetch(base64Data);
+        return await response.blob();
     } catch (e) {
         console.error("Base64 to Blob conversion failed", e);
         return new Blob([]);

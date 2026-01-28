@@ -25,17 +25,13 @@ const getEnvVar = (key: string, viteKey: string, fallback: string) => {
 const supabaseUrl = getEnvVar(
     'SUPABASE_URL', 
     'VITE_SUPABASE_URL', 
-    ''
+    'https://sstxqgkipagoicgucduy.supabase.co'
 );
 
 const supabaseKey = getEnvVar(
     'SUPABASE_KEY', 
     'VITE_SUPABASE_KEY', 
-    ''
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzdHhxZ2tpcGFnb2ljZ3VjZHV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0NjA0MTYsImV4cCI6MjA4NTAzNjQxNn0.bwmQI3-siOWtKoqARENSS6W7vFR80_du5hA-fEYT4Wk'
 );
-
-if (!supabaseUrl || !supabaseKey) {
-    console.warn("Supabase credentials missing! Check .env file.");
-}
 
 export const supabase = createClient(supabaseUrl, supabaseKey);

@@ -63,22 +63,14 @@ const BottomPromptBar: React.FC<BottomPromptBarProps> = ({ onGenerate }) => {
         for (const id of selectedCameoIds) {
             const cameo = profiles.find(p => p.id === id);
             if (!cameo) continue;
-            try {
-                const res = await fetch(cameo.imageUrl);
-                if (!res.ok) throw new Error('Failed to load cameo image');
-                const blob = await res.blob();
-                const file = new File([blob], 'ref.png', { type: blob.type });
-                const imgFile = await fileToImageFile(file);
-                
-                onGenerate({
-                    prompt: `${prompt} (Style: ${cameo.name})`,
-                    model: selectedModel, aspectRatio, resolution: Resolution.P720,
-                    mode: GenerationMode.REFERENCES_TO_VIDEO,
-                    referenceImages: [imgFile]
-                });
-            } catch (e) {
-                console.error("Cameo processing error:", e);
-            }
+            const res = await fetch(cameo.imageUrl);
+            const blob = await res.blob();
+            onGenerate({
+                prompt: `${prompt} (Style: ${cameo.name})`,
+                model: selectedModel, aspectRatio, resolution: Resolution.P720,
+                mode: GenerationMode.REFERENCES_TO_VIDEO,
+                referenceImages: [{ file: new File([blob], 'ref.png'), base64: cameo.imageUrl.split('base64,')[1] || '' }]
+            });
         }
     } else {
         onGenerate({
