@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -10,9 +9,9 @@ import {
   Chat,
   Type
 } from '@google/genai';
-import {GenerateVideoParams, GenerationMode, ImageFile, Resolution, AspectRatio, StudioSettings, VeoModel} from '../types';
+import {GenerateVideoParams, GenerationMode, Resolution, AspectRatio, StudioSettings, VeoModel} from '../types';
 
-const getActiveKey = () => process.env.API_KEY || '';
+const getActiveKey = () => import.meta.env.VITE_GEMINI_API_KEY || '';
 
 export const testApiConnection = async (): Promise<boolean> => {
     try {
@@ -186,6 +185,9 @@ export const generateCharacterReplacement = async (params: GenerateVideoParams, 
     if (!params.startFrame || !params.referenceImages?.[0]) {
         throw new Error("Missing video frame or character reference");
     }
+    if (!params.startFrame.base64 || !params.referenceImages[0].base64) {
+        throw new Error("Invalid image data for character replacement");
+    }
     statusCallback?.("Анализ сцены...");
     const scenePrompt = await analyzeVideoFrame(params.startFrame.base64, params.startFrame.file.type);
     statusCallback?.("Вклейка персонажа...");
@@ -248,9 +250,9 @@ export const generateVideo = async (params: GenerateVideoParams): Promise<{url: 
   const modelChain = [params.model, VeoModel.VEO_FAST];
   const uniqueChain = Array.from(new Set(modelChain));
   let lastError = null;
-  for (const model of uniqueChain) {
+  for (const attemptModel of uniqueChain) {
       try {
-          const op = await runGeneration(model as VeoModel);
+          const op = await runGeneration(attemptModel as VeoModel);
           if (op.response?.generatedVideos?.[0]) {
               const videoUri = op.response.generatedVideos[0].video.uri;
               const res = await fetch(`${videoUri}&key=${getActiveKey()}`);
@@ -258,7 +260,7 @@ export const generateVideo = async (params: GenerateVideoParams): Promise<{url: 
               return { url: URL.createObjectURL(blob), blob };
           }
       } catch (e: any) {
-          console.warn(`Модель ${model} не сработала...`, e);
+          console.warn(`Модель ${attemptModel} не сработала...`, e);
           lastError = e;
       }
   }

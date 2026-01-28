@@ -26,10 +26,15 @@ const App: React.FC = () => {
   useEffect(() => {
     const checkKeySelection = async () => {
       const aistudio = (window as any).aistudio;
+      // Check environment variable (Vite style)
+      const envKey = import.meta.env.VITE_GEMINI_API_KEY;
+
       if (aistudio) {
         const hasKey = await aistudio.hasSelectedApiKey();
-        if (!hasKey && !process.env.API_KEY) setShowKeyDialog(true);
-      } else if (!process.env.API_KEY) setShowKeyDialog(true);
+        if (!hasKey && !envKey) setShowKeyDialog(true);
+      } else if (!envKey) {
+          setShowKeyDialog(true);
+      }
     };
     checkKeySelection();
     getAllPosts().then(posts => setFeed(posts || []));
