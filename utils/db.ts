@@ -109,7 +109,7 @@ export const savePost = async (post: FeedPost, videoBlob?: Blob) => {
                 "errorMessage": postData.errorMessage,
                 "referenceImageBase64": postData.referenceImageBase64,
                 filters: postData.filters,
-                "aspectRatio": postData.aspectRatio,
+                // aspectRatio: postData.aspectRatio, // REMOVED: Column likely missing in DB schema
                 resolution: postData.resolution,
                 "originalParams": postData.originalParams,
             });
@@ -131,7 +131,17 @@ export const getAllPosts = async (): Promise<FeedPost[]> => {
             .order('created_at', { ascending: false });
 
         if (error) throw error;
-        return (data as FeedPost[]) || [];
+
+        // Map response to FeedPost, polyfilling missing columns from originalParams/JSONB if needed
+        const posts = (data || []).map((row: any) => {
+            const originalParams = row.originalParams || row.original_params;
+            return {
+                ...row,
+                aspectRatio: row.aspectRatio || row.aspect_ratio || originalParams?.aspectRatio
+            };
+        });
+
+        return posts as FeedPost[];
     } catch (e) {
         console.error('Error fetching posts:', e);
         return [];
