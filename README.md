@@ -1,20 +1,41 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# noworries_scosta
 
-# Run and deploy your AI Studio app
+This app uses **Supabase Edge Functions** as the backend for chat/memory and **Gemini** is called server-side (no client API key).
 
-This contains everything you need to run your app locally.
+## Local run
 
-View your app in AI Studio: https://ai.studio/apps/drive/1SpKHSpSrI2h85nNbXI5VgQyeRbwRzUPO
+### Prerequisites
+- Node.js
 
-## Run Locally
+### Install
 
-**Prerequisites:**  Node.js
+```bash
+npm install
+```
 
+### Env
+Create `.env.local`:
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+Example:
+
+```bash
+VITE_SUPABASE_URL=https://wfjuolmetsbddtzewqhv.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+```
+
+### Run
+
+```bash
+npm run dev
+```
+
+## Backend (Supabase)
+
+Edge Functions used:
+- `chat_send`
+- `admin_set_provider_key`
+
+> Secrets (`GEMINI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PIN_HASH`) are configured in Supabase Dashboard.
