@@ -20,8 +20,8 @@ Optional (client):
 
 ### Supabase
 
-Run migration:
-- `supabase/migrations/0001_integrations.sql`
+Run SQL migration:
+- `supabase_migration_integrations.sql`
 
 Notes:
 - `integrations` table has RLS enabled and **no policies** by default (client cannot access).
