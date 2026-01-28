@@ -5,6 +5,7 @@
 */
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useCallback, useEffect, useState, Component, ErrorInfo, ReactNode } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import ApiKeyDialog from './components/ApiKeyDialog';
 import BottomPromptBar from './components/BottomPromptBar';
 import VideoCard from './components/VideoCard';
@@ -186,6 +187,7 @@ const AppContent: React.FC = () => {
       </main>
 
       <BottomPromptBar onGenerate={handleGenerate} />
+      <SpeedInsights />
     </div>
   );
 };
