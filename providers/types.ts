@@ -4,7 +4,8 @@ export type ProviderCapability =
   | 'talking_head'
   | 'image_to_video'
   | 'face_swap'
-  | 'character_swap';
+  | 'character_swap'
+  | (string & {});
 
 export type ProviderStatus = 'enabled' | 'disabled' | 'misconfigured';
 

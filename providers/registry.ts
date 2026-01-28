@@ -11,7 +11,10 @@ export async function listProviders(): Promise<ProviderPublic[]> {
   const integrations = await getEnabledIntegrations();
 
   return integrations.map((i) => {
-    const caps = (i.capabilities?.length ? i.capabilities : DEFAULT_CAPS[i.provider_id]) || [];
+    const capsRaw = (i.capabilities?.length ? i.capabilities : DEFAULT_CAPS[i.provider_id]) || [];
+
+    // integrations.capabilities is stored as text[] in DB, so treat as ProviderCapability strings for MVP
+    const caps = capsRaw as unknown as ProviderCapability[];
 
     return {
       provider_id: i.provider_id as ProviderId,
