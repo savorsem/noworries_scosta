@@ -5,139 +5,67 @@
 
 @layer base {
   :root {
-    --theme-bg: #000000;
-    --theme-surface: #111111;
-    --theme-border: rgba(255, 255, 255, 0.1);
+    --theme-bg: #030303;
+    --theme-surface: #0a0a0a;
+    --theme-border: rgba(255, 255, 255, 0.05);
     --theme-text-main: #ffffff;
-    --theme-text-muted: rgba(255, 255, 255, 0.5);
-    --theme-accent: #ffffff;
-    --theme-accent-glow: rgba(255, 255, 255, 0.1);
-  }
-
-  [data-theme='neon'] {
-    --theme-bg: #030014;
-    --theme-surface: #0a0a1f;
-    --theme-border: rgba(100, 200, 255, 0.2);
-    --theme-accent: #00f3ff;
-    --theme-accent-glow: rgba(0, 243, 255, 0.3);
-  }
-
-  [data-theme='sunset'] {
-    --theme-bg: #1a0505;
-    --theme-surface: #2a1010;
-    --theme-border: rgba(255, 100, 50, 0.2);
-    --theme-accent: #ff8c42;
-    --theme-accent-glow: rgba(255, 140, 66, 0.3);
-  }
-
-  /* LIGHT THEME OVERRIDES */
-  [data-theme='light'] {
-    --theme-bg: #f2f2f7;
-    --theme-surface: #ffffff;
-    --theme-border: rgba(0, 0, 0, 0.08);
-    --theme-text-main: #1d1d1f;
-    --theme-text-muted: rgba(0, 0, 0, 0.5);
-    --theme-accent: #007aff;
-    --theme-accent-glow: rgba(0, 122, 255, 0.2);
+    --theme-text-muted: rgba(255, 255, 255, 0.4);
+    --theme-accent: #6366f1;
+    --theme-accent-glow: rgba(99, 102, 241, 0.15);
   }
 
   body {
     background-color: var(--theme-bg);
     color: var(--theme-text-main);
-    transition: background-color 0.4s ease, color 0.4s ease;
-    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
   }
 }
 
-/* SMART THEME ADAPTATION FOR TAILWIND UTILITIES */
-/* This allows us to keep using 'text-white' and 'bg-black' in code but have them swap in Light mode */
+@layer components {
+  .glass-card {
+    @apply bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)];
+  }
+  
+  .neural-glow {
+    box-shadow: 0 0 40px -10px var(--theme-accent-glow);
+  }
 
-[data-theme='light'] .text-white { color: #1d1d1f !important; }
-[data-theme='light'] .text-white\/90 { color: rgba(29, 29, 31, 0.9) !important; }
-[data-theme='light'] .text-white\/80 { color: rgba(29, 29, 31, 0.8) !important; }
-[data-theme='light'] .text-white\/70 { color: rgba(29, 29, 31, 0.7) !important; }
-[data-theme='light'] .text-white\/60 { color: rgba(29, 29, 31, 0.6) !important; }
-[data-theme='light'] .text-white\/40 { color: rgba(29, 29, 31, 0.4) !important; }
-[data-theme='light'] .text-white\/30 { color: rgba(29, 29, 31, 0.3) !important; }
-[data-theme='light'] .text-white\/20 { color: rgba(29, 29, 31, 0.2) !important; }
-[data-theme='light'] .text-white\/10 { color: rgba(29, 29, 31, 0.1) !important; }
+  .neural-border {
+    @apply border border-white/5 hover:border-indigo-500/30 transition-all duration-500;
+  }
 
-[data-theme='light'] .bg-black { background-color: #ffffff !important; }
-[data-theme='light'] .bg-black\/50 { background-color: rgba(255, 255, 255, 0.8) !important; }
-[data-theme='light'] .bg-black\/40 { background-color: rgba(255, 255, 255, 0.6) !important; }
-[data-theme='light'] .bg-black\/20 { background-color: rgba(0, 0, 0, 0.05) !important; }
-
-/* Invert white/glass backgrounds to dark/glass for contrast or keep light */
-[data-theme='light'] .bg-white\/5 { background-color: rgba(0, 0, 0, 0.05) !important; }
-[data-theme='light'] .bg-white\/10 { background-color: rgba(0, 0, 0, 0.08) !important; }
-[data-theme='light'] .bg-white\/20 { background-color: rgba(0, 0, 0, 0.12) !important; }
-
-[data-theme='light'] .border-white\/5 { border-color: rgba(0, 0, 0, 0.05) !important; }
-[data-theme='light'] .border-white\/10 { border-color: rgba(0, 0, 0, 0.1) !important; }
-[data-theme='light'] .border-white\/20 { border-color: rgba(0, 0, 0, 0.2) !important; }
-
-/* Specific component overrides */
-[data-theme='light'] .bg-neutral-900 { background-color: #ffffff !important; }
-[data-theme='light'] .bg-neutral-900\/90 { background-color: rgba(255, 255, 255, 0.9) !important; }
-[data-theme='light'] .bg-gray-900 { background-color: #f5f5f7 !important; }
-[data-theme='light'] .bg-gray-900\/40 { background-color: rgba(240, 240, 245, 0.8) !important; }
-[data-theme='light'] .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1) !important; }
-
-/* Theme Accent Classes */
-.theme-text-accent { color: var(--theme-accent); }
-.theme-bg-accent { background-color: var(--theme-accent); }
-.theme-border-accent { border-color: var(--theme-accent-glow); }
-
-input[type=range] {
-  -webkit-appearance: none;
-  width: 100%;
-  background: transparent;
+  .scanline {
+    width: 100%;
+    height: 100px;
+    z-index: 10;
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(255, 255, 255, 0.02) 50%, rgba(0, 0, 0, 0) 100%);
+    opacity: 0.1;
+    position: absolute;
+    bottom: 100%;
+    animation: scanline 8s linear infinite;
+    pointer-events: none;
+  }
 }
 
-input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  height: 16px;
-  width: 16px;
-  border-radius: 50%;
-  background: var(--theme-text-main);
-  cursor: pointer;
-  margin-top: -6px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-}
-
-input[type=range]::-webkit-slider-runnable-track {
-  width: 100%;
-  height: 4px;
-  cursor: pointer;
-  background: var(--theme-border);
-  border-radius: 2px;
+@keyframes scanline {
+  0% { bottom: 100%; }
+  100% { bottom: -100px; }
 }
 
 .no-scrollbar::-webkit-scrollbar {
-    display: none;
+  display: none;
 }
 .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-body {
-  padding-bottom: env(safe-area-inset-bottom);
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-@keyframes pulse-subtle {
-  0%, 100% { opacity: 0.8; }
-  50% { opacity: 0.4; }
+input[type=range] {
+  @apply h-1 bg-white/10 rounded-full appearance-none cursor-pointer;
 }
 
-@keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.animate-pulse-subtle {
-  animation: pulse-subtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-.animate-spin-slow {
-  animation: spin-slow 12s linear infinite;
+input[type=range]::-webkit-slider-thumb {
+  @apply w-3 h-3 bg-white rounded-full appearance-none shadow-lg border-2 border-indigo-500;
 }

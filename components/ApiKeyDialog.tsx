@@ -76,8 +76,8 @@ const ApiKeyDialog: React.FC<ApiKeyDialogProps> = ({ onContinue }) => {
             className="text-white hover:text-gray-300 transition-colors underline underline-offset-2 decoration-white/30 hover:decoration-white"
           >
             оплате
-          </a>{' '}
-          и{' '}
+          </a>
+          {', '}
           <a
             href="https://ai.google.dev/gemini-api/docs/pricing#veo-3"
             target="_blank"
@@ -85,6 +85,15 @@ const ApiKeyDialog: React.FC<ApiKeyDialogProps> = ({ onContinue }) => {
             className="text-white hover:text-gray-300 transition-colors underline underline-offset-2 decoration-white/30 hover:decoration-white"
           >
             ценах
+          </a>
+          {' '}и{' '}
+          <a
+            href="https://ai.google.dev/gemini-api/docs/api-key"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white hover:text-gray-300 transition-colors underline underline-offset-2 decoration-white/30 hover:decoration-white"
+          >
+            получении ключа
           </a>.
         </p>
       </div>
