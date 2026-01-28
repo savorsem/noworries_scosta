@@ -1,3 +1,4 @@
+
 {
   "name": "veo-studio",
   "private": true,
@@ -6,31 +7,19 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "lint": "eslint .",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "preview": "vite preview"
   },
   "dependencies": {
     "react-dom": "^19.2.0",
     "react": "^19.2.0",
     "@google/genai": "^1.22.0",
     "lucide-react": "^0.469.0",
-    "@supabase/supabase-js": "^2.39.0",
-    "framer-motion": "^12.0.0"
+    "@supabase/supabase-js": "^2.39.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.17.0",
     "@types/node": "^22.14.0",
-    "@types/react": "^18.2.79",
-    "@types/react-dom": "^18.2.25",
     "@vitejs/plugin-react": "^5.0.0",
-    "eslint": "^9.17.0",
-    "eslint-plugin-react-hooks": "^5.0.0",
-    "eslint-plugin-react-refresh": "^0.4.16",
     "typescript": "~5.8.2",
-    "typescript-eslint": "^8.19.0",
-    "vite": "^6.2.0",
-    "vitest": "^2.1.8"
+    "vite": "^6.2.0"
   }
 }
