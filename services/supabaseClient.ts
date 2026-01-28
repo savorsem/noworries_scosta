@@ -8,3 +8,22 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+/**
+ * Ensures there is an authenticated user session.
+ * Requires Supabase Auth Provider "Anonymous" to be enabled in the project.
+ */
+export const ensureAnonymousSession = async () => {
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
+  if (error) throw error;
+  if (session?.user) return session.user;
+
+  const { data, error: signInError } = await supabase.auth.signInAnonymously();
+  if (signInError) throw signInError;
+
+  return data.user;
+};
