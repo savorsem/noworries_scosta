@@ -3,8 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { FeedPost, CameoProfile, AgentMessage, StoryboardFrame, GlobalSettings } from '../types';
-import { supabase } from '../services/supabaseClient';
+import { supabase, ensureAnonymousSession } from '../services/supabaseClient';
 import { healer } from '../services/healerService'; // Circular dependency risk? Handled by minimal imports in healer.
+
+const getAuthedUserId = async (): Promise<string> => {
+  const user = await ensureAnonymousSession();
+  return user.id;
+};
 
 // Helper to upload a file (Blob or File) to Supabase Storage
 const uploadFile = async (bucket: string, path: string, file: Blob): Promise<string | null> => {
@@ -45,10 +50,7 @@ export const base64ToBlob = async (base64Data: string): Promise<Blob> => {
 
 export const syncUserSettings = async (settings: GlobalSettings) => {
   try {
-    // Since we don't have user Auth fully integrated in UI, we use a local ID or a single 'global' row for this demo.
-    // In production with Auth, this would use the user's UUID.
-    const userId = localStorage.getItem('user_uuid') || 'anonymous_user';
-    if (!localStorage.getItem('user_uuid')) localStorage.setItem('user_uuid', userId);
+    const userId = await getAuthedUserId();
 
     const { error } = await supabase.from('user_settings').upsert({
       user_id: userId,
@@ -355,11 +357,7 @@ let consecutiveLogFailures = 0;
 const LOG_THROTTLE_MS = 5000; // at most once per 5s to reduce spam
 const MAX_CONSECUTIVE_LOG_FAILURES = 3; // then disable remote logging for this session
 
-export const logEvent = async (
-  level: 'info' | 'warn' | 'error',
-  message: string,
-  details?: any
-) => {
+export const logEvent = async (level: 'info' | 'warn' | 'error', message: string, details?: any) => {
   // Circuit breaker: if logging itself is failing, don't keep trying.
   if (consecutiveLogFailures >= MAX_CONSECUTIVE_LOG_FAILURES) return;
 
