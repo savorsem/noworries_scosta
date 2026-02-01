@@ -8,8 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b --pretty false && vite build",
-    "build:only": "vite build",
+    "build": "vite build",
+    "build:full": "tsc -b --pretty false && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
